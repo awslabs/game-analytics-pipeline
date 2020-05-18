@@ -1,0 +1,20 @@
+{
+    "name": "game-analytics-pipeline-analytics-processing",
+    "version": "0.0.1",
+    "description": "Lambda Function for processing output from Kinesis Data Analytics SQL Application",
+    "private": true,
+    "main": "index.js",
+    "dependencies": {
+        "aws-sdk": "*",
+        "moment": "^2.24.0"
+    },
+    "devDependencies": {
+        "npm-run-all": "*"
+    },
+    "scripts": {
+        "build:init": "rm -rf package-lock.json && rm -rf dist && rm -rf node_modules",
+        "build:zip": "zip -rq analytics-processing.zip .",
+        "build:dist": "mkdir dist && mv analytics-processing.zip dist/",
+        "build": "npm run build:init && npm install --production && npm run build:zip && npm run build:dist"
+    }
+}

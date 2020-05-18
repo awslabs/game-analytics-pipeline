@@ -1,0 +1,16 @@
+{
+    "name": "game-analytics-lambda-authorizer",
+    "version": "0.0.1",
+    "description": "API Gateway Lambda Authorizer used to validate requests to solution /events API endpoint",
+    "private": true,
+    "main": "index.js",
+    "dependencies": {
+        "aws-sdk": "*"
+    },
+    "scripts": {
+        "build:init": "rm -rf package-lock.json && rm -rf dist && rm -rf node_modules",
+        "build:zip": "zip -rq lambda-authorizer.zip .",
+        "build:dist": "mkdir dist && mv lambda-authorizer.zip dist/",
+        "build": "npm run build:init && npm install --production && npm run build:zip && npm run build:dist"
+    }
+}

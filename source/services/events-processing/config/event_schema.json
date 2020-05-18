@@ -1,0 +1,68 @@
+{
+	"$schema": "http://json-schema.org/draft-04/schema#",
+	"title": "Game Analytics JSON Event Schema",
+	"description": "Format of events that are ingested to the AWS Game Analytics Pipeline",
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"event": { 
+			"$ref": "#/definitions/event"
+		},
+		"application_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "The application identifier (UUID) this event is associated with"
+    }
+	},
+	"required": ["event", "application_id"],
+	"definitions": {
+		"event": {
+			"type": "object",
+			"properties": {
+				"event_id": {
+					"type": "string",
+					"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+					"description": "The unique identifier for the event, formatted as UUID v4 string."
+				},
+				"event_type": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9-_.]+$",
+					"description": "Identifies the type of event"
+				},
+				"event_name": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9-_.]+$",
+					"description": "Name of the event that occurred"
+				},
+				"event_timestamp": {
+					"type": "number",
+					"description": "The time in seconds since the Unix epoch at which this event occurred (set by producer of event)."
+				},
+				"client_id": {
+					"type": "string",
+					"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+					"description": "The unique identifier for the client that generated the event, formatted as a UUID v4 string."
+				},
+				"event_version": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9-_.]+$",
+					"description": "An API version for this event format."
+				},
+				"user_id": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9-_]+$",
+					"description": "The unique identifier of the user this event is associated with, formatted as UUID v4 string. It is recommended to set this field if you want to perform player-based analytics."
+				},
+				"session_id": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9-_]+$",
+					"description": "The unique identifier for the user session associated with this event, formatted as a UUID v4 string. It is recommended to set this field if you want to perform session-based analytics."
+				},
+				"event_data": {
+					"type": "object"
+				}
+			},
+			"required": ["event_id", "event_type", "event_timestamp", "client_id", "event_name"]
+		}
+	}
+}

@@ -1,0 +1,24 @@
+{
+    "name": "game-analytics-glue-partition-creator",
+    "description": "Function to create partitions in Glue on a recurring scheduled basis as part of the game analytics pipeline solution",
+    "main": "index.js",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+        "aws-sdk": "*",
+        "moment": "^2.24.0"
+    },
+    "devDependencies": {
+        "aws-sdk": "*"
+    },
+    "scripts": {
+        "build:init": "rm -rf package-lock.json && rm -rf dist && rm -rf node_modules",
+        "build:zip": "zip -rq glue-partition-creator.zip .",
+        "build:dist": "mkdir dist && mv glue-partition-creator.zip dist/",
+        "build": "npm run build:init && npm install --production && npm run build:zip && npm run build:dist"
+    },
+    "bundledDependencies": [
+        "aws-sdk",
+        "moment"
+    ]
+}

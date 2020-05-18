@@ -1,0 +1,2858 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: '(SO0096) - AWS Game Analytics Pipeline Solution template (Version %%VERSION%%)'
+
+Parameters:
+  KinesisStreamShards:
+    Description: Number of shards to provision for the Game Events Kinesis Data Stream
+    Type: Number
+    Default: 1
+  SolutionMode:
+    Type: String
+    Description: |
+      'The default Dev mode configures Kinesis Data Firehose with a buffer interval of 60 seconds to deliver data more quickly to S3 during testing, generates sample Athena queries, 
+      and creates sample application and API Key for testing the solution. Prod mode configures the buffer interval to 15 minutes to optimize for cost savings and maximum Firehose batching and doesn't deploy the sample Application/Key or the queries. 
+    AllowedValues:
+      - 'Dev'
+      - 'Prod'
+    Default: 'Dev'
+  EnableStreamingAnalytics:
+    Type: String
+    Description: |
+      'This feature deploys a real-time streaming analytics application (Kinesis Data Analytics for SQL) that is used to generate live metrics (Lambda output to CloudWatch Metrics)'
+    AllowedValues:
+      - 'Yes'
+      - 'No'
+    Default: 'Yes'
+  SolutionAdminEmailAddress:
+    Type: String
+    Description: |
+      Email address used to receive notifications from Schema Registry Service.
+    Default: false
+Mappings:
+  SourceCode:
+    General:
+      S3Bucket: '%%BUCKET_NAME%%'
+      KeyPrefix: '%%SOLUTION_NAME%%/%%VERSION%%'
+  Solution:
+    Data:
+      ID: 'SO0096'
+      Version: '%%VERSION%%'
+      SendAnonymousData: 'Yes' # Set to 'Yes' before shipping
+  CloudWatchSettings:
+    LogGroup:
+      RetentionInDays: 30
+  JobScheduleSettings:
+    ScheduledJobIntervals:
+      Every1Hour: 'cron(0 */1 * * ? *)'
+      EveryDay: 'cron(00 00 * * ? *)'
+  GlueSettings:
+    LocationS3Prefix: 
+      RawEventsS3Prefix: 'raw_events'
+      ProcessedEventsS3Prefix: 'processed_events'
+      EtlTempS3Prefix: 'glueetl-tmp'
+    RawEventsTable:
+      TableName: 'raw_events'
+  StreamIngestion:
+    FirehoseSettings: 
+      S3BackupMode: 'Disabled' # Enabled/Disabled
+  ApiConfiguration:
+    StageSettings:
+      StageName: 'live'
+    
+Conditions:
+  EmailProvided: !Not [!Equals [!Ref SolutionAdminEmailAddress, false]]
+  SendData: !Equals 
+    - !FindInMap [Solution, Data, SendAnonymousData]
+    - 'Yes'
+  StreamingAnalytics: !Equals [!Ref EnableStreamingAnalytics, 'Yes']
+  ConfigureDevMode: !Equals [!Ref SolutionMode, 'Dev']
+
+Globals:
+  Function:
+    Runtime: nodejs12.x
+    Tracing: Active
+    AutoPublishAlias: 'live'
+    Environment:
+      Variables:
+        LOGGING_LEVEL: 2
+        STACK_NAME: !Ref AWS::StackName
+      
+Resources:
+  #############
+  # FUNCTIONS #
+  #############
+  GluePartitionCreator:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'Function creates a new date-based partition in Glue Database based on UTC Year/Month/Day'
+      Runtime: nodejs12.x
+      CodeUri: 
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "glue-partition-creator.zip"]]
+      Timeout: 300
+      MemorySize: 128
+      Environment:
+        Variables:
+          TABLE_NAME: !FindInMap [GlueSettings, RawEventsTable, TableName]
+          DATABASE_NAME: !Ref GameEventsDatabase
+      Events:
+        CreatePartition:
+          Type: Schedule
+          Properties:
+            Schedule: !FindInMap [JobScheduleSettings, ScheduledJobIntervals, Every1Hour]
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Sid: CWLogs
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutDestination
+                - logs:PutLogEvents
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+            - Sid: GlueAccess
+              Effect: Allow
+              Action:
+                - glue:GetTable
+                - glue:GetTables
+                - glue:UpdateTable
+                - glue:GetTableVersion
+                - glue:GetTableVersions
+                - glue:CreatePartition
+                - glue:BatchCreatePartition
+                - glue:GetPartition
+                - glue:GetPartitions
+                - glue:BatchGetPartition
+                - glue:UpdatePartition
+              Resource: 
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+      
+  EventsProcessingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'Function to process and transform raw events before they get written to S3'
+      Runtime: nodejs12.x
+      CodeUri: 
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "events-processing.zip"]]
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+          CACHE_TIMEOUT_SECONDS: 60
+      Policies:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CWLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutDestination
+              - logs:PutLogEvents
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+          - Sid: DynamoDBAccess
+            Effect: Allow
+            Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:GetItem
+              - dynamodb:GetRecords
+              - dynamodb:Query
+              - dynamodb:Scan
+            Resource:
+              - !GetAtt ApplicationsTable.Arn
+              
+  EventsProcessingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${EventsProcessingFunction}'
+      
+  
+  AnalyticsProcessingFunction:
+    Type: AWS::Serverless::Function
+    Condition: StreamingAnalytics
+    Properties:
+      CodeUri:
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "analytics-processing.zip"]]
+      Environment:
+        Variables:
+          STACK_NAME: !Ref 'AWS::StackName'
+          CW_NAMESPACE: !Sub '${AWS::StackName}/AWSGameAnalytics'
+      Description: Consumes outputs from Kinesis Data Analytics application for processing
+      Handler: index.handler
+      MemorySize: 128
+      Runtime: nodejs12.x
+      Timeout: 60
+      Role: !GetAtt AnalyticsProcessingRole.Arn
+  
+  AnalyticsProcessingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: AnalyticsProcessingPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource:
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutDestination
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource: 
+                  - '*'
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W11
+            reason: '* Resource is used to allow the role to publish CloudWatch Metrics and X-Ray traces'
+
+  AnalyticsProcessingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AnalyticsProcessingFunction}'
+      RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
+             
+  SolutionHelper:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: 'Solution Helper utility function'
+      CodeUri:
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "solution-helper.zip"]]
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Timeout: 300
+      MemorySize: 128
+      Environment:
+        Variables:
+          VERSION: '%%VERSION%%'
+      Policies:
+        Version: 2012-10-17
+        Statement:
+          - Sid: GetSolutionS3Objects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+            Resource:
+              !Join
+                - ''
+                - - !Sub 'arn:${AWS::Partition}:s3:::'
+                  - !FindInMap [SourceCode, General, S3Bucket]
+                  - !Sub '-${AWS::Region}'
+                  - '/'
+                  - !FindInMap [SourceCode, General, KeyPrefix]
+                  - '/*'
+          - Sid: UploadS3Objects
+            Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource:
+              !Join
+                - ''
+                - - !GetAtt AnalyticsBucket.Arn
+                  - '/*'
+          - Sid: DynamoDB
+            Effect: Allow
+            Action: 
+              - dynamodb:PutItem
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ApplicationsTable}'
+              - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${AuthorizationsTable}'
+          - Sid: KinesisAnalytics
+            Effect: Allow
+            Action:
+              - kinesisanalytics:StartApplication
+              - kinesisanalytics:DescribeApplication
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:kinesisanalytics:${AWS::Region}:${AWS::AccountId}:application/${KinesisAnalyticsApp}'
+          - Sid: InvokeGluePartitionCreator
+            Effect: Allow
+            Action:
+              - lambda:InvokeFunction
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${GluePartitionCreator}:*'
+          - Sid: GluePermissions
+            Effect: Allow
+            Action:
+              - glue:PutDataCatalogEncryptionSettings
+            Resource:
+              - '*'
+          - Sid: CWLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutDestination
+              - logs:PutLogEvents
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+          - Sid: AthenaQueries
+            Effect: Allow
+            Action:
+              - athena:CreateNamedQuery
+            Resource: 
+              - !Sub 'arn:${AWS::Partition}:athena:${AWS::Region}:${AWS::AccountId}:workgroup/${GameAnalyticsWorkgroup}'
+  LambdaAuthorizer:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'Lambda Authorizer'
+      Runtime: nodejs12.x
+      CodeUri: 
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "lambda-authorizer.zip"]]
+      Timeout: 60
+      MemorySize: 128
+      Environment:
+        Variables:
+          AUTHORIZATIONS_TABLE: !Ref AuthorizationsTable
+          APPLICATION_AUTHORIZATIONS_INDEX: 'ApplicationAuthorizations'
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+      Policies:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CWLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutDestination
+              - logs:PutLogEvents
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+          - Sid: DynamoDbAccess
+            Effect: Allow
+            Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:GetItem
+              - dynamodb:Query
+              - dynamodb:Scan
+            Resource:
+              - !GetAtt ApplicationsTable.Arn
+              - !GetAtt AuthorizationsTable.Arn
+              - !Sub '${AuthorizationsTable.Arn}/index/*'
+  
+  LambdaAuthorizerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${LambdaAuthorizer}'
+      RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
+      
+  ApplicationAdminServiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Description: 'Application admin service'
+      Runtime: nodejs12.x
+      CodeUri: 
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "admin.zip"]]
+      Timeout: 60
+      MemorySize: 128
+      Environment:
+        Variables:
+          AUTHORIZATIONS_TABLE: !Ref AuthorizationsTable
+          APPLICATION_AUTHORIZATIONS_INDEX: 'ApplicationAuthorizations'
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+      Policies:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CWLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutDestination
+              - logs:PutLogEvents
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+          - Sid: DynamoDbAccess
+            Effect: Allow
+            Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:GetItem
+              - dynamodb:GetRecords
+              - dynamodb:Query
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:Scan
+              - dynamodb:PutItem
+            Resource:
+              - !GetAtt ApplicationsTable.Arn
+              - !GetAtt AuthorizationsTable.Arn
+              - !Sub '${AuthorizationsTable.Arn}/index/*'
+  ApplicationAdminServiceServiceFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ApplicationAdminServiceFunction}'
+      RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
+      
+  #############
+  # S3 BUCKET #
+  #############
+  AnalyticsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref SolutionLogsBucket
+        LogFilePrefix: AnalyticsBucket/
+      LifecycleConfiguration:
+        Rules:
+          - Id: S3IntelligentTiering7DaysRaw
+            Transitions:
+              - StorageClass: INTELLIGENT_TIERING
+                TransitionInDays: 7
+            Prefix: !Join ['/', [!FindInMap [GlueSettings, LocationS3Prefix, RawEventsS3Prefix]]]
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: INTELLIGENT_TIERING
+                TransitionInDays: 7
+          - Id: S3IntelligentTiering7DaysProcessed
+            Transitions:
+              - StorageClass: INTELLIGENT_TIERING
+                TransitionInDays: 7
+            Prefix: !Join ['/', [!FindInMap [GlueSettings, LocationS3Prefix, ProcessedEventsS3Prefix]]]
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: INTELLIGENT_TIERING
+                TransitionInDays: 7
+          - Id: S3IntelligentTiering7DaysErrors
+            Transitions:
+              - StorageClass: INTELLIGENT_TIERING
+                TransitionInDays: 7
+            Prefix: 'firehose-errors/'
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: INTELLIGENT_TIERING
+                TransitionInDays: 7
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W51
+            reason: 'S3 Bucket Policy not needed; this is a private bucket that should only be accessed by the resources defined in the template, which have IAM permissions defined to access. For additional permissions customers can define them on the bucket after launch'
+  
+  SolutionLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W35
+            reason: This is the destination logging bucket for S3 buckets in this solution
+          - id: W51
+            reason: Policy not required for this bucket
+    Properties:
+      AccessControl: LogDeliveryWrite
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+      LifecycleConfiguration:
+        Rules:
+          - Id: S3StandardInfrequentAccess
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+  
+  ##########
+  # Athena #
+  ##########
+  GameAnalyticsWorkgroup:
+    Type: AWS::Athena::WorkGroup
+    Condition: ConfigureDevMode
+    Properties: 
+      Name: !Sub 'GameAnalyticsWorkgroup-${AWS::StackName}'
+      Description: 'Default workgroup created by solution template'
+      RecursiveDeleteOption: true # delete the associated queries when stack is deleted
+      State: ENABLED
+      WorkGroupConfiguration: 
+        PublishCloudWatchMetricsEnabled: true
+        ResultConfiguration:
+          EncryptionConfiguration: 
+            EncryptionOption: SSE_S3
+          OutputLocation: !Sub 's3://${AnalyticsBucket}/athena_query_results/'
+  
+  # Create the Athena Named Queries in the Workgroup 
+  CreateAthenaQueries:
+    Type: Custom::LoadLambda
+    Condition: ConfigureDevMode
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      customAction: createAthenaNamedQueries
+      database: !Ref GameEventsDatabase
+      workgroupName: !Ref GameAnalyticsWorkgroup
+      table: !Ref GameRawEventsTable
+  
+  ########
+  # Glue #
+  ########  
+  GameEventsDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Description: !Sub 'Database for game analytics events for stack ${AWS::StackName}'
+        LocationUri: !Sub 's3://${AnalyticsBucket}'
+  
+  # Raw Events Table definition used by Kinesis Firehose for loading ingested events
+  GameRawEventsTable:
+    DependsOn: GameEventsDatabase
+    Type: AWS::Glue::Table
+    Properties: 
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GameEventsDatabase
+      TableInput: 
+        Description: !Sub 'Stores raw event data from the game analytics pipeline for stack ${AWS::StackName}'
+        Name: !FindInMap [GlueSettings, RawEventsTable, TableName]
+        TableType: 'EXTERNAL_TABLE'
+        PartitionKeys: 
+          - Name: year
+            Type: string
+          - Name: month
+            Type: string
+          - Name: day
+            Type: string
+        Parameters:
+          classification: parquet
+          compressionType: none
+          typeOfData: file
+        StorageDescriptor: 
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          Compressed: false
+          NumberOfBuckets: -1
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+            Parameters:
+              serialization.format: '1'
+          BucketColumns: []
+          SortColumns: []
+          StoredAsSubDirectories: false
+          Location: !Sub
+            - 's3://${AnalyticsBucket}/${Prefix}'
+            - Prefix: !FindInMap
+                - GlueSettings
+                - LocationS3Prefix
+                - RawEventsS3Prefix
+          Columns:
+            - Name: event_id
+              Type: string
+            - Name: event_type
+              Type: string
+            - Name: event_name
+              Type: string
+            - Name: event_version
+              Type: string
+            - Name: event_timestamp
+              Type: bigint
+            - Name: client_id
+              Type: string
+            - Name: user_id
+              Type: string
+            - Name: session_id
+              Type: string
+            - Name: application_id
+              Type: string
+            - Name: application_name
+              Type: string
+            - Name: event_data 
+              Type: string
+            - Name: metadata
+              Type: string
+            - Name: custom_event
+              Type: string
+
+  EtlJobStatusEvents:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: !Sub 'CloudWatch Events Rule for generating status events for Glue ETL Job for stack ${AWS::StackName}'
+      EventPattern:
+        source: 
+          - 'aws.glue'
+        detail-type: 
+          - 'Glue Job State Change'
+        detail: 
+          jobName:
+            - !Ref GameEventsEtlJob
+      State: ENABLED
+      Targets: 
+        - 
+          Arn: !Ref Notifications
+          Id: !Sub 'NotificationsTopic-${AWS::StackName}'
+  
+  GlueCrawlerStatusEvents:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: !Sub 'CloudWatch Events Rule for generating status events for Glue Crawler, for stack ${AWS::StackName}'
+      EventPattern:
+        source: 
+          - 'aws.glue'
+        detail-type: 
+          - 'Glue Crawler State Change'
+        detail: 
+          crawlerName:
+            - !Ref EventsCrawler
+      State: ENABLED
+      Targets: 
+        - 
+          Arn: !Ref Notifications
+          Id: !Sub 'NotificationsTopic-${AWS::StackName}'
+      
+  # Glue Crawler to detect changes to the processed events 
+  EventsCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Role: !GetAtt GlueCrawlerRole.Arn
+      Description: !Sub 'AWS Glue Crawler for partitioned data, for stack ${AWS::StackName}'
+      DatabaseName: !Ref GameEventsDatabase
+      Targets:
+        S3Targets:
+          - Path: !Sub
+            - 's3://${AnalyticsBucket}/${Prefix}'
+            - Prefix: !FindInMap
+                - GlueSettings
+                - LocationS3Prefix
+                - ProcessedEventsS3Prefix
+      SchemaChangePolicy:
+        UpdateBehavior: 'UPDATE_IN_DATABASE'
+        DeleteBehavior: 'LOG'
+      Configuration: "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"
+  
+  GlueCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'glue.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: GameAnalyticsPipelineGlueCrawlerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - s3:ListBucket
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:  
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - glue:BatchGetPartition
+                  - glue:GetPartition
+                  - glue:GetPartitions
+                  - glue:BatchCreatePartition
+                  - glue:CreatePartition
+                  - glue:CreateTable
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:GetTableVersion
+                  - glue:GetTableVersions
+                  - glue:UpdatePartition
+                  - glue:UpdateTable
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
+              - Effect: Allow
+                Action:
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:UpdateDatabase
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/glue'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: 
+                  - !Sub 'arn:*:logs:*:*:/aws-glue/*'
+            
+  # Glue Workflow to organize ETL Job and Crawlers under a single logical container         
+  GameEventsWorkflow:
+    Type: AWS::Glue::Workflow
+    Properties:
+      Description: !Sub 'Orchestrates a Glue ETL Job and Crawler to process data in S3 and update data catalog, for stack ${AWS::StackName}'
+      DefaultRunProperties:
+        '--enable-metrics': 'true'
+        '--enable-continuous-cloudwatch-log': 'true'
+        '--enable-glue-datacatalog': 'true'
+        '--database_name': !Ref GameEventsDatabase
+        '--raw_events_table_name': !FindInMap [GlueSettings, RawEventsTable, TableName]
+        '--analytics_bucket': !Sub 's3://${AnalyticsBucket}/'
+        '--processed_data_prefix': !FindInMap [GlueSettings, LocationS3Prefix, ProcessedEventsS3Prefix]
+        '--glue_tmp_prefix': !FindInMap [GlueSettings, LocationS3Prefix, EtlTempS3Prefix]
+        '--job-bookmark-option': 'job-bookmark-enable'
+        '--TempDir': !Join ['', [!Sub 's3://${AnalyticsBucket}/', !FindInMap [GlueSettings, LocationS3Prefix, EtlTempS3Prefix]]]
+
+  GameEventsCrawlerTrigger:
+    Type: AWS::Glue::Trigger
+    Properties:
+      WorkflowName: !Ref GameEventsWorkflow
+      StartOnCreation: true
+      Type: CONDITIONAL
+      Description: !Sub 'This trigger starts a crawler to update Glue with changes to the processed_events prefix, for stack ${AWS::StackName}'
+      Actions:
+        - CrawlerName: !Ref EventsCrawler
+      Predicate:
+        Conditions:
+          - LogicalOperator: EQUALS
+            JobName: !Ref GameEventsEtlJob
+            State: SUCCEEDED
+  
+  GameEventsTriggerETLJob:
+    Type: AWS::Glue::Trigger
+    Properties:
+      WorkflowName: !Ref GameEventsWorkflow
+      StartOnCreation: true
+      Type: SCHEDULED
+      Description: !Sub 'Conditional trigger to start etl job when the game events staging crawler completes, for stack ${AWS::StackName}'
+      Actions:
+        - JobName: !Ref GameEventsEtlJob
+      Schedule: !FindInMap [JobScheduleSettings, ScheduledJobIntervals, EveryDay]
+  
+  # IAM Role allowing Glue ETL Job to access Analytics Bucket      
+  GameEventsEtlRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - 'glue.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName: GameAnalyticsPipelineGlueETL
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 
+                  - s3:ListBucket
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:  
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - glue:BatchGetPartition
+                  - glue:GetPartition
+                  - glue:GetPartitions
+                  - glue:BatchCreatePartition
+                  - glue:CreatePartition
+                  - glue:CreateTable
+                  - glue:GetTable
+                  - glue:GetTables
+                  - glue:GetTableVersion
+                  - glue:GetTableVersions
+                  - glue:UpdatePartition
+                  - glue:UpdateTable
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
+              - Effect: Allow
+                Action:
+                  - glue:GetDatabase
+                  - glue:GetDatabases
+                  - glue:UpdateDatabase
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/glue'
+  
+  # Invoke the GluePartitionCreator function to create date-based Glue Partition for current date (UTC)
+  CreateGluePartition:
+    Type: Custom::LoadLambda
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      customAction: InvokeFunctionSync
+      functionArn: !Ref GluePartitionCreator.Alias
+  
+  # Enable Server-Side Encryption settings for Glue Data Catalog
+  # Use custom resource to avoid CloudFormation Errors if data catalog is already encrypted.
+  GluePutDataCatalogEncryption:
+    Type: Custom::LoadLambda
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      customAction: putDataCatalogEncryptionSettings
+      catalogId: !Ref AWS::AccountId
+  
+  # Glue ETL Job to process events from staging and repartition by event_type and date
+  GameEventsEtlJob:
+    Type: AWS::Glue::Job
+    DependsOn: CopyGlueETLScriptToS3
+    Properties:
+      Description: !Sub 'Etl job for processing raw game event data, for stack ${AWS::StackName}'
+      Role: !Ref GameEventsEtlRole
+      GlueVersion: '1.0'
+      MaxCapacity: 10
+      Timeout: 30
+      ExecutionProperty:   
+        MaxConcurrentRuns: 1 
+      Command:
+        Name: glueetl
+        PythonVersion: '3'
+        ScriptLocation: !Sub 's3://${AnalyticsBucket}/glue-scripts/game_events_etl.py'
+      DefaultArguments: 
+        '--enable-metrics': 'true'
+        '--enable-continuous-cloudwatch-log': 'true'
+        '--enable-glue-datacatalog': 'true'
+        '--database_name': !Ref GameEventsDatabase
+        '--raw_events_table_name': !FindInMap [GlueSettings, RawEventsTable, TableName]
+        '--analytics_bucket': !Sub 's3://${AnalyticsBucket}/'
+        '--processed_data_prefix': !FindInMap [GlueSettings, LocationS3Prefix, ProcessedEventsS3Prefix]
+        '--glue_tmp_prefix': !FindInMap [GlueSettings, LocationS3Prefix, EtlTempS3Prefix]
+        '--job-bookmark-option': 'job-bookmark-enable'
+        '--TempDir': !Join ['', [!Sub 's3://${AnalyticsBucket}/', !FindInMap [GlueSettings, LocationS3Prefix, EtlTempS3Prefix]]]
+      MaxRetries: 0
+  
+  ###########
+  # Kinesis #
+  ###########
+  GameEventsStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      RetentionPeriodHours: 24
+      ShardCount: !Ref KinesisStreamShards
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+        
+  GameEventsFirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: firehose_delivery_policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                  - lambda:GetFunctionConfiguration
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${EventsProcessingFunction}:*'
+              - Effect: Allow
+                Action:
+                  - kinesis:DescribeStream
+                  - kinesis:GetShardIterator
+                  - kinesis:GetRecords
+                  - kinesis:ListShards
+                Resource: 
+                  - !Sub 'arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${GameEventsStream}'
+              - Effect: Allow
+                Action:
+                  - glue:GetTable
+                  - glue:GetTableVersion
+                  - glue:GetTableVersions
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
+                  - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+              - Effect: Allow
+                Action:
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kinesisfirehose/*:log-stream:*'
+              - Effect: Allow
+                Action: logs:PutLogEvents
+                Resource: !GetAtt FirehoseLogGroup.Arn
+            
+  FirehoseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
+      LogGroupName: !Sub '/aws/kinesisfirehose/${AWS::StackName}-Ingestion'
+
+  FirehoseS3DeliveryLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref FirehoseLogGroup
+      LogStreamName: "S3Delivery"
+  
+  FirehoseBackupDeliveryLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref FirehoseLogGroup
+      LogStreamName: 'S3SourceRecordBackup'
+  
+  GameEventsFirehose:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamType: KinesisStreamAsSource
+      KinesisStreamSourceConfiguration: 
+        KinesisStreamARN: !GetAtt GameEventsStream.Arn
+        RoleARN: !GetAtt GameEventsFirehoseRole.Arn
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}'
+        BufferingHints:
+          IntervalInSeconds: !If [ConfigureDevMode, 60, 900] 
+          SizeInMBs: 128 
+        Prefix: !Join ['', [!FindInMap [GlueSettings, LocationS3Prefix, RawEventsS3Prefix], '/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/']]
+        ErrorOutputPrefix: firehose-errors/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/!{firehose:error-output-type}/
+        CompressionFormat: UNCOMPRESSED # Parquet format is already compressed with SNAPPY
+        RoleARN: !GetAtt GameEventsFirehoseRole.Arn
+        ProcessingConfiguration:
+          Enabled: true
+          Processors:
+            - Type: Lambda
+              Parameters:
+                - ParameterName: LambdaArn
+                  ParameterValue: !Ref EventsProcessingFunction.Alias
+                - ParameterName: BufferIntervalInSeconds
+                  ParameterValue: '60' 
+                - ParameterName: BufferSizeInMBs
+                  ParameterValue: '3' 
+                - ParameterName: NumberOfRetries
+                  ParameterValue: '3'
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: !Ref FirehoseLogGroup
+          LogStreamName: !Ref FirehoseS3DeliveryLogStream
+        S3BackupMode: !FindInMap [StreamIngestion, FirehoseSettings, S3BackupMode]
+        S3BackupConfiguration:
+          BucketARN: !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}'
+          CloudWatchLoggingOptions:
+            Enabled: true
+            LogGroupName: !Ref FirehoseLogGroup
+            LogStreamName: !Ref FirehoseBackupDeliveryLogStream
+          CompressionFormat: GZIP
+          BufferingHints: 
+            IntervalInSeconds: 900
+            SizeInMBs: 128
+          Prefix: FirehoseS3SourceRecordBackup/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/
+          ErrorOutputPrefix: FirehoseS3SourceRecordBackup/firehose-errors/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/!{firehose:error-output-type}/
+          RoleARN: !GetAtt GameEventsFirehoseRole.Arn
+        DataFormatConversionConfiguration:
+          Enabled: true
+          InputFormatConfiguration:
+            Deserializer:
+              OpenXJsonSerDe:
+                CaseInsensitive: true
+                ConvertDotsInJsonKeysToUnderscores: false
+          OutputFormatConfiguration:
+            Serializer:
+              ParquetSerDe:
+                Compression: SNAPPY
+          SchemaConfiguration:
+            CatalogId: !Ref AWS::AccountId
+            RoleARN: !GetAtt GameEventsFirehoseRole.Arn
+            DatabaseName: !Ref GameEventsDatabase
+            TableName: !Ref GameRawEventsTable
+            Region: !Ref AWS::Region
+            VersionId: LATEST
+
+  ###################
+  # DYNAMODB TABLES #
+  ###################
+  ApplicationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: application_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: application_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+  
+  AuthorizationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: api_key_id
+          AttributeType: S
+        - AttributeName: application_id
+          AttributeType: S
+        - AttributeName: api_key_value
+          AttributeType: S
+      KeySchema:
+        - AttributeName: api_key_id
+          KeyType: HASH
+        - AttributeName: application_id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: ApplicationAuthorizations
+          KeySchema:
+            - AttributeName: application_id
+              KeyType: HASH
+            - AttributeName: api_key_id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ApiKeyValues
+          KeySchema:
+            - AttributeName: api_key_value
+              KeyType: HASH
+            - AttributeName: application_id
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - api_key_id
+              - enabled
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+  
+  
+  ####################
+  # Custom Resources #
+  ####################
+  CreateUniqueID:
+    Type: Custom::LoadLambda
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      customAction: createUuid
+  
+  CopyGlueETLScriptToS3:
+    Type: Custom::LoadLambda
+    DependsOn: AnalyticsBucket
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      customAction: uploadS3Object
+      sourceS3Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+      sourceS3Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "game_events_etl.py"]]
+      destinationS3Bucket: !Ref AnalyticsBucket
+      destinationS3Key: !Sub 'glue-scripts/game_events_etl.py'
+
+  SendAnonymousData:
+    Type: Custom::LoadLambda
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      SolutionId: !FindInMap [Solution, Data, ID]
+      UUID: !GetAtt CreateUniqueID.UUID
+      Version: !FindInMap [Solution, Data, Version]
+      AnonymousData: !FindInMap ['Solution', 'Data', 'SendAnonymousData']
+      customAction: 'sendAnonymousMetric'
+      EnableStreamingAnalytics: !Ref EnableStreamingAnalytics
+      GameEventsStreamShardCount: !Ref KinesisStreamShards
+    
+  # Create a sample API Key in Authorizations table 
+  CreateApiAuthorization:
+    DependsOn:
+      - CreateDefaultApplication
+    Type: Custom::LoadLambda
+    Condition: ConfigureDevMode
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      authorizationsTable: !Ref AuthorizationsTable
+      application_id: !GetAtt CreateDefaultApplication.application_id
+      application_name: !GetAtt CreateDefaultApplication.application_name
+      customAction: CreateApiAuthorization
+      key_name: !Sub 'default-key-${AWS::StackName}'
+      key_description: 'Auto-generated api key'
+  
+  # Create a sample application in the Applications Table
+  CreateDefaultApplication:
+    Type: Custom::LoadLambda
+    Condition: ConfigureDevMode
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      applicationsTable: !Ref ApplicationsTable
+      description: 'Default application created by the solution'
+      application_name: 'default_app'
+      customAction: createDefaultApplication 
+      
+  StartKinesisAnalyticsApp:
+    Condition: StreamingAnalytics
+    DependsOn:
+      - GameEventsStream
+      - KinesisAnalyticsLambdaOutput
+    Type: Custom::LoadLambda
+    Properties:
+      ServiceToken: !Ref SolutionHelper.Alias
+      Region: !Ref AWS::Region
+      kinesisAnalyticsAppName: !Ref KinesisAnalyticsApp
+      customAction: startKinesisAnalyticsApp
+
+  #######
+  # API #   
+  #######
+  ApiGatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: apigateway_put_kinesis
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Resource: 
+                  - !Sub 'arn:${AWS::Partition}:kinesis:${AWS::Region}:${AWS::AccountId}:stream/${GameEventsStream}'
+        - PolicyName: apigateway_invoke_lambda
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: 
+                  - !Ref ApplicationAdminServiceFunction.Alias
+                  - !Ref LambdaAuthorizer.Alias
+     
+  GameAnalyticsApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'GameAnalyticsApi-${AWS::StackName}'
+      StageName: !FindInMap [ApiConfiguration, StageSettings, StageName]
+      OpenApiVersion: 3.0.0
+      TracingEnabled: true
+      Variables:
+        kinesis_stream: !Ref GameEventsStream
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          DataTraceEnabled: true
+          LoggingLevel: ERROR
+          MetricsEnabled: true
+      Cors:
+        AllowOrigin: "'*'"
+        AllowHeaders: "'authorization, content-type'"
+      DefinitionBody:
+        openapi: 3.0.0
+        info:
+          title: Game Analytics Pipeline API
+        schemes: ["https"]
+        x-amazon-apigateway-api-key-source: "AUTHORIZER"
+        x-amazon-apigateway-request-validators:
+          all:
+            validateRequestBody: true
+            validateRequestParameters: true
+        x-amazon-apigateway-gateway-responses:
+          BAD_REQUEST_BODY:
+            responseTemplates:
+              application/json: !Sub >
+                {
+                  "error": "BadRequest",
+                  "error_detail": "$context.error.validationErrorString"
+                }
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          DEFAULT_4XX:
+            statusCode: 400
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: !Sub >
+                {
+                  "error": "BadRequest",
+                  "error_detail": "$context.error.validationErrorString"
+                }
+          DEFAULT_5XX:
+            statusCode: 500
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: !Sub >
+                {
+                  "error": "InternalFailure",
+                  "error_detail": "$context.error.message"
+                }
+          ACCESS_DENIED:
+            statusCode: 403
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: !Sub >
+                {
+                  "error": "AccessDenied"
+                }
+          UNAUTHORIZED:
+            statusCode: 403
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: !Sub >
+                {
+                  "error": "AccessDenied"
+                }
+          MISSING_AUTHENTICATION_TOKEN:
+            statusCode: 403
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: !Sub >
+                {
+                  "error": "AccessDenied"
+                }
+          INTEGRATION_FAILURE:
+            statusCode: 500
+            responseParameters:
+              gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: !Sub >
+                {
+                  "error": "InternalFailure",
+                  "error_detail": "An error occurred on the server side."
+                }
+        paths:
+          "/applications":
+            options:
+              consumes:
+              - "application/json"
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              security:
+              - sigv4: []
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: "when_no_match"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                type: "mock"
+            x-amazon-apigateway-any-method:
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+              security:
+              - sigv4: []
+              x-amazon-apigateway-integration:
+                uri:
+                  !Join
+                    - ''
+                    - - 'arn:${AWS::Partition}:apigateway:${AWS::Region}'
+                      - ':lambda:path/2015-03-31/functions/'
+                      - !Ref ApplicationAdminServiceFunction.Alias
+                      - '/invocations'
+                responses:
+                  default:
+                    statusCode: "200"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                contentHandling: "CONVERT_TO_TEXT"
+                type: "aws_proxy"
+                credentials: !GetAtt ApiGatewayRole.Arn
+          "/applications/{applicationId}":
+            options:
+              consumes:
+              - "application/json"
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              security:
+              - sigv4: []
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: "when_no_match"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                type: "mock"
+            x-amazon-apigateway-any-method:
+              produces:
+              - "application/json"
+              parameters:
+              - name: "applicationId"
+                in: "path"
+                required: true
+                type: "string"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+              security:
+              - sigv4: []
+              x-amazon-apigateway-integration:
+                uri: 
+                  !Join
+                    - ''
+                    - - 'arn:${AWS::Partition}:apigateway:${AWS::Region}'
+                      - ':lambda:path/2015-03-31/functions/'
+                      - !Ref ApplicationAdminServiceFunction.Alias
+                      - '/invocations'
+                responses:
+                  default:
+                    statusCode: "200"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                contentHandling: "CONVERT_TO_TEXT"
+                type: "aws_proxy"
+                credentials: !GetAtt ApiGatewayRole.Arn
+          "/applications/{applicationId}/authorizations":
+            options:
+              consumes:
+              - "application/json"
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              security:
+              - sigv4: []
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: "when_no_match"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                type: "mock"
+            x-amazon-apigateway-any-method:
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+              security:
+              - sigv4: []
+              x-amazon-apigateway-integration:
+                uri: 
+                  !Join
+                    - ''
+                    - - 'arn:${AWS::Partition}:apigateway:${AWS::Region}'
+                      - ':lambda:path/2015-03-31/functions/'
+                      - !Ref ApplicationAdminServiceFunction.Alias
+                      - '/invocations'
+                responses:
+                  default:
+                    statusCode: "200"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                contentHandling: "CONVERT_TO_TEXT"
+                type: "aws_proxy"
+                credentials: !GetAtt ApiGatewayRole.Arn
+          "/applications/{applicationId}/authorizations/{apiKeyId}":
+            options:
+              consumes:
+              - "application/json"
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              security:
+              - sigv4: []
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: "when_no_match"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                type: "mock"
+            x-amazon-apigateway-any-method:
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+              security:
+              - sigv4: []
+              x-amazon-apigateway-integration:
+                uri: 
+                  !Join
+                    - ''
+                    - - 'arn:${AWS::Partition}:apigateway:${AWS::Region}'
+                      - ':lambda:path/2015-03-31/functions/'
+                      - !Ref ApplicationAdminServiceFunction.Alias
+                      - '/invocations'
+                responses:
+                  default:
+                    statusCode: "200"
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                contentHandling: "CONVERT_TO_TEXT"
+                type: "aws_proxy"
+                credentials: !GetAtt ApiGatewayRole.Arn
+          "/applications/{applicationId}/events":
+            post:
+              operationId: SendEvents
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      $ref: "#/components/schemas/GameEventsBatchSchema"
+                required: true
+              x-amazon-apigateway-request-validator: all
+              responses:
+                "200":
+                  description: Successful POST /events
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/GameEventSuccessResponse"
+                "400":
+                  description: Bad Request Exception
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+                "401":
+                  description: Unauthorized Exception
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+                "500":
+                  description: Internal Server Error
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+              security:
+                - lambda_authorizer: []
+              x-amazon-apigateway-integration:
+                uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:kinesis:action/PutRecords"
+                credentials: !GetAtt ApiGatewayRole.Arn
+                passthroughBehavior: "never"
+                httpMethod: "POST"
+                type: "aws"
+                requestParameters:
+                  integration.request.header.Content-Type: "'x-amz-json-1.1'"
+                requestTemplates:
+                  application/json: !Sub >
+                    {
+                      "StreamName": "$stageVariables.kinesis_stream",
+                      "Records": [
+                        #set($i = 0)
+                        #foreach($event in $input.path('$.events'))
+                          #set($data = $input.json("$.events[$i]"))
+                          #set($output = "{
+                            ""event"": $data,
+                            ""aws_ga_api_validated_flag"": true,
+                            ""aws_ga_api_requestId"": ""$context.requestId"",
+                            ""aws_ga_api_requestTimeEpoch"": $context.requestTimeEpoch,
+                            ""aws_ga_api_sourceIp"": ""$context.identity.sourceIp"",
+                            ""application_id"": ""$util.escapeJavaScript($input.params().path.get('applicationId'))""
+                          }" )
+                          {
+                            "Data": "$util.base64Encode($output)",
+                            "PartitionKey": "$event.client_id"
+                          }#if($foreach.hasNext),#end
+                          #set($i = $i + 1)
+                        #end
+                      ]
+                    }
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseTemplates:
+                      application/json: !Sub >
+                        #set($response = $input.path('$')) #set($records = $input.json('$.Records')) {
+                          "Total": $response.Records.size(),
+                          "FailedRecordCount": $input.json('$.FailedRecordCount'),
+                          "Events": [#foreach($record in $response.Records){#if($record.ErrorCode != $null)"Result": "Error", "ErrorCode": "$record.ErrorCode"}#else"Result": "Ok"}#end#if($foreach.hasNext),#end#end]
+                        }
+                  "4\\d{2}":
+                    statusCode: "400"
+                    responseTemplates:
+                      application/json: !Sub >
+                        #set($inputRoot = $input.path('$'))
+                        {
+                          "error": "BadRequest",
+                          "error_detail": $input.json('$.message')
+                        }
+                  "5\\d{2}":
+                    statusCode: "500"
+                    responseTemplates:
+                      application/json: !Sub >
+                        #set($inputRoot = $input.path('$')) 
+                        {
+                          "error": $input.json('$.__type'),
+                          "error_detail": $input.json('$.message')
+                        }
+        components:
+          schemas:
+            ErrorException:
+              type: object
+              properties:
+                error:
+                  type: string
+                  description: Error code from the API
+                error_detail:
+                  type: string
+                  description: Error message
+            GameEventSuccessResponse:
+              type: object
+              title: Game Event Success Response Schema
+              properties:
+                Total:
+                  type: number
+                  description: Total number of events that were processed in the request
+                FailedRecordCount:
+                  type: number
+                  description: Number of events that failed to be saved to game events stream
+                Events:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/GameEventSuccessResponseRecord"
+            GameEventSuccessResponseRecord:
+              type: object
+              properties:
+                Result:
+                  type: string
+                  description: Processing result for the input record
+                ErrorCode:
+                  type: string
+                  description: The error code from the game events stream. Value set if Result is Error.
+            GameEventsBatchSchema:
+              type: object
+              title: Game Analytics Batched Events Schema
+              required: 
+                - events
+              properties:
+                events:
+                  type: array
+                  items: 
+                    $ref: "#/components/schemas/GameEventSchema"
+            GameEventSchema:
+              type: object
+              title: Game Analytics API Event Schema
+              additionalProperties: false
+              description: 'Game Event sent to the Solution API'
+              required:
+                  - event_id
+                  - client_id
+                  - event_type
+                  - event_name
+                  - event_timestamp
+              properties:
+                client_id:
+                  type: string
+                  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                  description: A UUID that uniquely identifies the client.
+                event_id:
+                  type: string
+                  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                  description: A random UUID that uniquely identifies an event.
+                event_type:
+                  type: string
+                  pattern: "^[A-Za-z0-9-_.]+$"
+                  description: Identifies the type of event
+                event_name:
+                  type: string
+                  pattern: "^[A-Za-z0-9-_.]+$"
+                  description: Name of the event that occurred
+                event_version:
+                  type: string
+                  pattern: "^[A-Za-z0-9-_.]+$"
+                  description: An API version for this event format.
+                user_id:
+                  type: string
+                  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                  description: The unique identifier (UUID) of the player
+                event_timestamp:
+                  type: number
+                  description: The time in seconds since the Unix epoch at which this event occurred (set by producer of event).
+                session_id:
+                  type: string
+                  pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                  description: The unique session identifier (UUID)
+                event_data:
+                  type: object
+          securitySchemes:
+            lambda_authorizer:
+              type: "apiKey"
+              name: "Authorization"
+              in: "header"
+              x-amazon-apigateway-authtype: "custom"
+              x-amazon-apigateway-authorizer:
+                authorizerUri: !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaAuthorizer.Arn}:live/invocations'
+                authorizerCredentials: !GetAtt ApiGatewayRole.Arn
+                authorizerResultTtlInSeconds: 300
+                identitySource: "method.request.header.Authorization"
+                type: "request"
+            sigv4:
+              type: "apiKey"
+              name: "Authorization"
+              in: "header"
+              x-amazon-apigateway-authtype: "awsSigv4"
+  
+  ApiGatewayPushToCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Push logs to CloudWatch logs from API Gateway
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+  
+  ApiAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayPushToCloudWatchRole.Arn
+  
+  ApplicationAdminServiceExecutionPermission:
+    DependsOn:
+      - ApplicationAdminServiceFunction
+      - GameAnalyticsApi
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ApplicationAdminServiceFunction}:live'
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${GameAnalyticsApi}/*/*/applications/*'
+  
+  KinesisAnalyticsLambdaOutput:
+    Condition: StreamingAnalytics
+    Type: AWS::KinesisAnalytics::ApplicationOutput
+    Properties:
+      ApplicationName: !Ref KinesisAnalyticsApp
+      Output:
+        Name: DESTINATION_STREAM
+        DestinationSchema:
+          RecordFormatType: JSON
+        LambdaOutput:
+          ResourceARN: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AnalyticsProcessingFunction}:live'
+          RoleARN: !GetAtt KinesisAnalyticsRole.Arn
+  
+  KinesisAnalyticsErrorsOutput:
+    Condition: StreamingAnalytics
+    Type: AWS::KinesisAnalytics::ApplicationOutput
+    Properties:
+      ApplicationName: !Ref KinesisAnalyticsApp
+      Output:
+        Name: error_stream
+        DestinationSchema:
+          RecordFormatType: JSON
+        LambdaOutput:
+          ResourceARN: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AnalyticsProcessingFunction}:live'
+          RoleARN: !GetAtt KinesisAnalyticsRole.Arn
+        
+  KinesisAnalyticsApp:
+    Condition: StreamingAnalytics
+    Type: AWS::KinesisAnalytics::Application
+    Properties:
+      ApplicationName: !Sub 'AnalyticsApplication-${AWS::StackName}'
+      ApplicationDescription: !Sub 'Real-time game analytics application, for stack ${AWS::StackName}'
+      ApplicationCode:
+        Fn::Sub: 
+          - |
+              /*
+              This application generates real-time metrics that are processed by Lambda.
+              Query outputs should adhere to the schema defined in DESTINATION_STREAM required by the Lambda function that processes output. 
+              Additional in-application streams can be pumped into the DESTINATION_STREAM table for consumption and processing by Lambda.
+              Refer to the Game Analytics Pipeline Developer Guide for more information.
+              */
+              
+              CREATE STREAM "DESTINATION_STREAM"(
+              METRIC_NAME VARCHAR(1024),
+              METRIC_TIMESTAMP BIGINT,
+              METRIC_UNIT_VALUE_INT BIGINT,
+              METRIC_UNIT VARCHAR(1024),
+              DIMENSION_APPLICATION_ID VARCHAR(1024),
+              DIMENSION_COUNTRY_ID VARCHAR(1024),
+              DIMENSION_CURRENCY_TYPE VARCHAR (1024),
+              DIMENSION_WEAPON_ID VARCHAR (1024),
+              DIMENSION_MISSION_ID VARCHAR (1024),
+              DIMENSION_ITEM_ID VARCHAR (1024),
+              OUTPUT_TYPE VARCHAR(1024));
+              
+              -- Total Events
+              -- Count of Total Events within period
+              CREATE OR REPLACE PUMP "TOTAL_EVENTS_PUMP" AS
+              INSERT INTO "DESTINATION_STREAM" (METRIC_NAME, METRIC_TIMESTAMP, METRIC_UNIT_VALUE_INT, METRIC_UNIT, DIMENSION_APPLICATION_ID, OUTPUT_TYPE)
+              SELECT STREAM 'TotalEvents', UNIX_TIMESTAMP(TIME_WINDOW), COUNT(distinct_stream.event_id) AS unique_count, 'Count', distinct_stream.application_id, 'metrics'
+              FROM (
+                  SELECT STREAM DISTINCT
+                      rowtime as window_time,
+                      "AnalyticsApp_001"."event_id" as event_id,
+                      "AnalyticsApp_001"."application_id" as application_id,
+                      STEP("AnalyticsApp_001".rowtime BY INTERVAL '${Interval}' MINUTE) as TIME_WINDOW
+                  FROM "AnalyticsApp_001"
+              ) as distinct_stream
+              GROUP BY 
+                  application_id, 
+                  TIME_WINDOW,
+                  STEP(distinct_stream.window_time BY INTERVAL '${Interval}' MINUTE);
+              
+              -- Total Users
+              -- Count of Active users within period
+              CREATE OR REPLACE PUMP "USER_COUNTER_PUMP" AS
+              INSERT INTO "DESTINATION_STREAM" (METRIC_NAME, METRIC_TIMESTAMP, METRIC_UNIT_VALUE_INT, METRIC_UNIT, DIMENSION_APPLICATION_ID, OUTPUT_TYPE)
+              SELECT STREAM 'TotalUsers', UNIX_TIMESTAMP(TIME_WINDOW), COUNT(distinct_stream.user_id) AS unique_count, 'Count', distinct_stream.application_id, 'metrics'
+              FROM (
+                  SELECT STREAM DISTINCT
+                      rowtime as window_time,
+                      "AnalyticsApp_001"."user_id" as user_id,
+                      "AnalyticsApp_001"."application_id" as application_id,
+                      STEP("AnalyticsApp_001".rowtime BY INTERVAL '${Interval}' MINUTE) as TIME_WINDOW
+                  FROM "AnalyticsApp_001"
+              ) as distinct_stream
+              GROUP BY 
+                  application_id, 
+                  TIME_WINDOW,
+                  STEP(distinct_stream.window_time BY INTERVAL '${Interval}' MINUTE);
+              
+              -- Total Logins
+              -- Count of logins within period
+              CREATE OR REPLACE PUMP "PLAYER_LOGIN_PUMP" AS
+              INSERT INTO "DESTINATION_STREAM" (METRIC_NAME, METRIC_TIMESTAMP, METRIC_UNIT_VALUE_INT, METRIC_UNIT, DIMENSION_APPLICATION_ID, OUTPUT_TYPE)
+              SELECT STREAM 'TotalLogins', UNIX_TIMESTAMP(TIME_WINDOW), COUNT(distinct_stream.login_count) AS unique_count, 'Count', distinct_stream.application_id, 'metrics'
+              FROM (
+                  SELECT STREAM DISTINCT 
+                    rowtime as window_time, 
+                    "AnalyticsApp_001"."event_id" as login_count, 
+                    "AnalyticsApp_001"."application_id" as application_id,
+                    STEP("AnalyticsApp_001".rowtime BY INTERVAL '${Interval}' MINUTE) as TIME_WINDOW
+                  FROM "AnalyticsApp_001"
+                  WHERE "AnalyticsApp_001"."event_type" = 'login'
+              ) as distinct_stream 
+              GROUP BY 
+                  application_id,
+                  TIME_WINDOW,
+                  STEP(distinct_stream.window_time BY INTERVAL '${Interval}' MINUTE);
+              
+              -- Deaths By Weapon
+              -- Get the number of deaths by each weapon used in a kill in the period
+              CREATE OR REPLACE PUMP "DEATHS_BY_WEAPON_PUMP" AS
+              INSERT INTO "DESTINATION_STREAM" (METRIC_NAME, METRIC_TIMESTAMP, METRIC_UNIT_VALUE_INT, METRIC_UNIT, DIMENSION_WEAPON_ID, DIMENSION_APPLICATION_ID, OUTPUT_TYPE)
+              SELECT STREAM 'DeathsByWeapon', UNIX_TIMESTAMP(TIME_WINDOW), WEAPON_COUNT, 'Count', WEAPON_ID, application_id, 'metrics'
+              FROM (
+                  SELECT STREAM
+                    events."weapon_id" as WEAPON_ID,
+                    events."application_id" as application_id,
+                    count(*) as WEAPON_COUNT,
+                    STEP(events.rowtime BY INTERVAL '${Interval}' MINUTE) as TIME_WINDOW
+                  FROM "AnalyticsApp_001" events
+                  WHERE events."weapon_id" is not NULL
+                  AND events."event_type" = 'user_kill'
+                  GROUP BY
+                    STEP (events.ROWTIME BY INTERVAL '${Interval}' MINUTE),
+                    events."weapon_id",
+                    events."application_id"
+                  HAVING count(*) > 1
+                  ORDER BY STEP (events.ROWTIME BY INTERVAL '${Interval}' MINUTE), WEAPON_COUNT desc
+              );
+              
+              -- Purchases
+              -- Get all purchases grouped by country over the period
+              CREATE OR REPLACE PUMP "PURCHASES_PER_CURRENCY_PUMP" AS
+              INSERT INTO "DESTINATION_STREAM" (METRIC_NAME, METRIC_TIMESTAMP, METRIC_UNIT_VALUE_INT, METRIC_UNIT, DIMENSION_CURRENCY_TYPE, DIMENSION_APPLICATION_ID, OUTPUT_TYPE)
+              SELECT 'Purchases', UNIX_TIMESTAMP(TIME_WINDOW), PURCHASE_COUNT, 'Count', CURRENCY_TYPE, application_id, 'metrics' FROM (
+                  SELECT STREAM
+                    events."currency_type" as CURRENCY_TYPE,
+                    events."application_id" as application_id,
+                    count(*) as PURCHASE_COUNT,
+                    STEP(events.rowtime BY INTERVAL '${Interval}' MINUTE) as TIME_WINDOW
+                  FROM "AnalyticsApp_001" events
+                  WHERE events."currency_type" is not NULL
+                  AND events."event_type" = 'iap_transaction'
+                  GROUP BY
+                    STEP (events.ROWTIME BY INTERVAL '${Interval}' MINUTE),
+                    events."currency_type",
+                    events."application_id"
+                  HAVING count(*) > 1
+                  ORDER BY STEP (events.ROWTIME BY INTERVAL '${Interval}' MINUTE), PURCHASE_COUNT desc
+              );
+              
+              -- Registrations
+              -- Get user registrations grouped by country over time window
+              CREATE OR REPLACE PUMP "USER_REGISTRATION_BY_COUNTRY_PUMP" AS
+              INSERT INTO "DESTINATION_STREAM" (METRIC_NAME, METRIC_TIMESTAMP, METRIC_UNIT_VALUE_INT, METRIC_UNIT, DIMENSION_COUNTRY_ID, DIMENSION_APPLICATION_ID, OUTPUT_TYPE)
+              SELECT 'Registrations', UNIX_TIMESTAMP(TIME_WINDOW), REGISTRATION_COUNT, 'Count', COUNTRY_ID, application_id, 'metrics' FROM (
+                  SELECT STREAM
+                    events."country_id" as COUNTRY_ID,
+                    events."application_id" as application_id,
+                    count(*) as REGISTRATION_COUNT,
+                    STEP(events.rowtime BY INTERVAL '${Interval}' MINUTE) as TIME_WINDOW
+                  FROM "AnalyticsApp_001" events
+                  WHERE events."country_id" is not NULL
+                  AND events."event_type" = 'user_registration'
+                  GROUP BY
+                    STEP (events.ROWTIME BY INTERVAL '${Interval}' MINUTE),
+                    events."country_id",
+                    events."application_id"
+                  HAVING count(*) > 1
+                  ORDER BY STEP (events.ROWTIME BY INTERVAL '${Interval}' MINUTE), REGISTRATION_COUNT desc
+              );
+              
+              -- TotalSpendUsd
+              -- Total spend by Item (USD)
+              CREATE OR REPLACE PUMP "TOTAL_SPEND_PER_ITEM_USD_ONLY_PUMP" AS
+              INSERT INTO "DESTINATION_STREAM" (METRIC_NAME, METRIC_TIMESTAMP, METRIC_UNIT_VALUE_INT, METRIC_UNIT, DIMENSION_ITEM_ID, DIMENSION_APPLICATION_ID, OUTPUT_TYPE)
+              SELECT 'TotalSpendUsd', UNIX_TIMESTAMP(TIME_WINDOW), TOTAL_SPEND, 'Count', ITEM_ID, application_id, 'metrics'  FROM (
+                  SELECT STREAM
+                    events."item_id" as ITEM_ID,
+                    events."application_id" as application_id,
+                    sum(events."currency_amount") as TOTAL_SPEND,
+                    STEP(events.rowtime BY INTERVAL '${Interval}' MINUTE) as TIME_WINDOW
+                  FROM "AnalyticsApp_001" events
+                  WHERE events."item_id" is not NULL
+                  AND events."event_type" = 'iap_transaction' AND events."currency_type" = 'USD'
+                  GROUP BY
+                    STEP (events.ROWTIME BY INTERVAL '${Interval}' MINUTE),
+                    STEP (TO_TIMESTAMP("event_timestamp") by INTERVAL '${Interval}' MINUTE),
+                    events."item_id",
+                    events."application_id"
+                  HAVING count(*) > 1
+                  ORDER BY STEP (events.ROWTIME BY INTERVAL '${Interval}' MINUTE), TOTAL_SPEND desc
+              );
+          - {
+              Namespace: !Sub '${AWS::StackName}/AWSGameAnalytics',
+              Interval: !If [ConfigureDevMode, 1, 5] 
+            }
+      Inputs:
+        - NamePrefix: AnalyticsApp
+          InputSchema:
+            RecordColumns:
+              - Name: event_version
+                SqlType: VARCHAR(8)
+                Mapping: $.event.event_version
+              - Name: client_id
+                SqlType: VARCHAR(64)
+                Mapping: $.event.client_id
+              - Name: user_id
+                SqlType: VARCHAR(64)
+                Mapping: $.event.user_id
+              - Name: event_id
+                SqlType: VARCHAR(64)
+                Mapping: $.event.event_id
+              - Name: event_timestamp
+                SqlType: BIGINT
+                Mapping: $.event.event_timestamp
+              - Name: event_type
+                SqlType: VARCHAR(64)
+                Mapping: $.event.event_type
+              - Name: item_id
+                SqlType: VARCHAR(64)
+                Mapping: $.event.event_data.item_id
+              - Name: level_id
+                SqlType: VARCHAR(64)
+                Mapping: $.event.event_data.level_id
+              - Name: session_id
+                SqlType: VARCHAR(64)
+                Mapping: $.event.session_id
+              - Name: country_id
+                SqlType: VARCHAR(64)
+                Mapping: $.event.event_data.country_id
+              - Name: death_reason
+                SqlType: VARCHAR(64)
+                Mapping: $.event.event_data.death_reason
+              - Name: weapon_id
+                SqlType: VARCHAR(64)
+                Mapping: $.event.event_data.weapon_id
+              - Name: application_id
+                SqlType: VARCHAR(64)
+                Mapping: $.application_id
+              - Name: last_login_time
+                SqlType: BIGINT
+                Mapping: $.event.event_data.last_login_time
+              - Name: currency_type
+                SqlType: VARCHAR(64)
+                Mapping: $.event.event_data.currency_type
+              - Name: currency_amount
+                SqlType: DOUBLE
+                Mapping: $.event.event_data.currency_amount
+            RecordFormat:
+              RecordFormatType: JSON
+              MappingParameters:
+                JSONMappingParameters:
+                  RecordRowPath: $
+          KinesisStreamsInput:
+            ResourceARN: !GetAtt GameEventsStream.Arn
+            RoleARN: !GetAtt KinesisAnalyticsRole.Arn
+
+  KinesisAnalyticsRole:
+    Condition: StreamingAnalytics
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - kinesisanalytics.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: KinesisAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReadKinesisStream
+                Effect: Allow
+                Action:
+                  - kinesis:DescribeStream
+                  - kinesis:GetShardIterator
+                  - kinesis:GetRecords
+                  - kinesis:ListShards
+                Resource:
+                  - !GetAtt GameEventsStream.Arn
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AnalyticsProcessingInvokePermissions
+                Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                  - lambda:GetFunctionConfiguration
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AnalyticsProcessingFunction}'
+                  - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${AnalyticsProcessingFunction}:*'
+  ##############
+  # DASHBOARDS #
+  ##############
+  PipelineOpsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'PipelineOpsDashboard_${AWS::StackName}'
+      DashboardBody:
+        Fn::Sub: 
+          - |
+              {
+                "widgets": [
+                  {
+                    "type": "metric",
+                    "x": 12,
+                    "y": 5,
+                    "width": 12,
+                    "height": 3,
+                    "properties": {
+                      "metrics": [
+                        [ "AWS/Lambda", "ConcurrentExecutions", "FunctionName", "${AnalyticsProcessingFunction}", { "label": "Analytics Processing ConcurrentExecutions", "stat": "Maximum", "id": "concurrency" } ],
+                        [ ".", "Duration", ".", ".", { "label": "Lambda Duration", "id": "duration", "stat": "Average" } ],
+                        [ ".", "Throttles", ".", ".", { "label": "Lambda Throttles", "id": "throttles" } ]
+                      ],
+                      "view": "singleValue",
+                      "region": "${AWS::Region}",
+                      "title": "Real-time Analytics Health",
+                      "stat": "Sum",
+                      "setPeriodToTimeRange": false
+                    }
+                  },
+                  {
+                    "type": "text",
+                    "x": 0,
+                    "y": 0,
+                    "width": 24,
+                    "height": 2,
+                    "properties": {
+                      "markdown": "\n# **Game Analytics Pipeline - Operational Health**\nThis dashboard contains operational metrics for the Game Analytics Pipeline. Use these metrics to help you monitor the operational status of the AWS services used in the solution and track important application metrics.\n"
+                    }
+                  },
+                  {
+                    "type": "text",
+                    "x": 12,
+                    "y": 2,
+                    "width": 12,
+                    "height": 3,
+                    "properties": {
+                      "markdown": "\n## Real-time Streaming Analytics\nThe below metrics can be used to monitor the real-time streaming SQL analytics of events. Use the Kinesis Data Analytics MillisBehindLatest metric to help you track the lag on the Kinesis SQL Application from the latest events. The Analytics Processing function that processes KDA application outputs can be tracked to measure function concurrency, success percentage, processing duration and throttles.\n"
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 12,
+                    "y": 8,
+                    "width": 6,
+                    "height": 6,
+                    "properties": {
+                      "metrics": [
+                        [ "AWS/KinesisAnalytics", "MillisBehindLatest", "Id", "1.1", "Application", "${KinesisAnalyticsApp}", "Flow", "Input" ]
+                      ],
+                      "view": "timeSeries",
+                      "stacked": true,
+                      "period": 60,
+                      "region": "${AWS::Region}",
+                      "stat": "Average",
+                      "title": "Kinesis Analytics Latency"
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 0,
+                    "y": 8,
+                    "width": 6,
+                    "height": 6,
+                    "properties": {
+                      "metrics": [
+                        [ "AWS/Kinesis", "IncomingRecords", "StreamName", "${GameEventsStream}", { "id": "records", "color": "#2ca02c", "label": "Events Stream Incoming Records (Kinesis)" } ],
+                        [ "AWS/Firehose", "DeliveryToS3.Records", "DeliveryStreamName", "${GameEventsFirehose}", { "label": "Firehose Records Delivered to S3", "color": "#17becf", "id": "delivered" } ],
+                        [ "AWS/ApiGateway", "Count", "ApiName", "${GameAnalyticsApi}", "Resource", "/applications/{applicationId}/events", "Stage", "${Stage}", "Method", "POST", { "label": "Events REST API Request Count", "color": "#1f77b4" } ]
+                      ],
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "title": "Events Ingestion and Delivery",
+                      "stat": "Sum",
+                      "yAxis": {
+                        "left": {
+                            "label": "Count",
+                            "showUnits": false
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "text",
+                    "x": 0,
+                    "y": 2,
+                    "width": 12,
+                    "height": 3,
+                    "properties": {
+                      "markdown": "\n## Stream Ingestion & Processing\nThis section covers metrics related to ingestion of data into the solution's Events Stream and processing by Kinesis Data Firehose and AWS Lambda Events Processing Function. Use the metrics here to track data freshness/latency and any issues with processor throttling/errors. \n"
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 18,
+                    "y": 8,
+                    "width": 6,
+                    "height": 6,
+                    "properties": {
+                      "metrics": [
+                        [ "AWS/Lambda", "Errors", "FunctionName", "${AnalyticsProcessingFunction}", "Resource", "${AnalyticsProcessingFunction}:live", { "id": "errors", "stat": "Sum", "color": "#d13212", "region": "${AWS::Region}" } ],
+                        [ "AWS/Lambda", "Invocations", "FunctionName", "${AnalyticsProcessingFunction}", "Resource", "${AnalyticsProcessingFunction}:live", { "id": "invocations", "stat": "Sum", "visible": false, "region": "${AWS::Region}" } ],
+                        [ { "expression": "100 - 100 * errors / MAX([errors, invocations])", "label": "Success rate (%)", "id": "availability", "yAxis": "right", "region": "${AWS::Region}" } ]
+                      ],
+                      "region": "${AWS::Region}",
+                      "title": "Lambda Error count and success rate (%)",
+                      "period": 60,
+                      "stat": "Sum",
+                      "yAxis": {
+                        "right": {
+                          "max": 100,
+                          "label": "Percent",
+                          "showUnits": false
+                        },
+                        "left": {
+                          "showUnits": false,
+                          "label": ""
+                        }
+                      },
+                      "view": "timeSeries",
+                      "stacked": false
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 6,
+                    "y": 8,
+                    "width": 6,
+                    "height": 6,
+                    "properties": {
+                      "metrics": [
+                        [ "AWS/Lambda", "Errors", "FunctionName", "${EventsProcessingFunction}", "Resource", "${EventsProcessingFunction}:live", { "id": "errors", "stat": "Sum", "color": "#d13212", "region": "${AWS::Region}" } ],
+                        [ "AWS/Lambda", "Invocations", "FunctionName", "${EventsProcessingFunction}", "Resource", "${EventsProcessingFunction}:live", { "id": "invocations", "stat": "Sum", "visible": false, "region": "${AWS::Region}" } ],
+                        [ { "expression": "100 - 100 * errors / MAX([errors, invocations])", "label": "Success rate (%)", "id": "availability", "yAxis": "right", "region": "${AWS::Region}" } ]
+                      ],
+                      "region": "${AWS::Region}",
+                      "title": "Lambda Error count and success rate (%)",
+                      "period": 60,
+                      "stat": "Sum",
+                      "yAxis": {
+                        "right": {
+                          "max": 100,
+                          "label": "Percent",
+                          "showUnits": false
+                        },
+                        "left": {
+                          "showUnits": false,
+                          "label": ""
+                        }
+                      },
+                      "view": "timeSeries",
+                      "stacked": false
+                    }
+                  },
+                  {
+                    "type": "metric",
+                    "x": 0,
+                    "y": 5,
+                    "width": 12,
+                    "height": 3,
+                    "properties": {
+                      "metrics": [
+                        [ "AWS/Firehose", "DeliveryToS3.DataFreshness", "DeliveryStreamName", "${GameEventsFirehose}", { "visible": true, "label": "Data Freshness", "period": 300, "id": "datafreshness", "stat": "Maximum" } ],
+                        [ "AWS/Lambda", "Duration", "FunctionName", "${EventsProcessingFunction}", "Resource", "${EventsProcessingFunction}:live", { "id": "duration", "label": "Lambda Duration", "stat": "Average", "period": 300 } ],
+                        [ "AWS/Lambda", "ConcurrentExecutions", "FunctionName", "${EventsProcessingFunction}", { "visible": true, "label": "Lambda Concurrency", "id": "concurrency", "stat": "Maximum", "period": 300 } ],
+                        [ "AWS/Lambda", "Throttles", "FunctionName", "${EventsProcessingFunction}", { "label": "Lambda Throttles", "id": "throttles", "visible": true, "stat": "Sum", "period": 300 } ]
+                      ],
+                      "view": "singleValue",
+                      "stacked": true,
+                      "region": "${AWS::Region}",
+                      "title": "Events Processing Health",
+                      "stat": "Average"
+                    }
+                  }
+                ]
+              }
+          - {
+              # Create variable mapping to FindInMap value for API Stage
+              Stage: !FindInMap [ApiConfiguration, StageSettings, StageName]
+            } 
+  ####################
+  # METRICS & ALARMS #
+  ####################
+  Notifications:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub 'Notifications-${AWS::StackName}'
+      KmsMasterKeyId: !Ref SnsEncryptionKeyAlias
+  
+  SnsEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties: 
+      Description: !Sub 'KMS Key for encrypting SNS for game analytics pipeline - ${AWS::StackName}'
+      Enabled: true
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: default-key-policy
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS:
+              Fn::Join:
+              - ''
+              - - 'arn:aws:iam::'
+                - Ref: AWS::AccountId
+                - :root
+          Action: '*'
+          Resource: '*'
+        - Sid: Grants KMS permissions to CloudWatch to publish messages to encrypted SNS topic
+          Effect: Allow
+          Principal:
+            Service: 
+             - cloudwatch.amazonaws.com
+             - events.amazonaws.com
+          Action:
+            - 'kms:Decrypt'
+            - 'kms:GenerateDataKey*'
+          Resource: '*'
+  
+  SnsEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties: 
+      AliasName: !Sub 'alias/aws_game_analytics/${AWS::StackName}/SnsEncryptionKey'
+      TargetKeyId: !Ref SnsEncryptionKey
+  
+  #Register email to topic if email address is provided
+  SolutionAdminSnsSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: EmailProvided
+    Properties: 
+      Endpoint: !Ref SolutionAdminEmailAddress
+      Protocol: 'email'
+      Region: !Ref AWS::Region
+      TopicArn: !Ref Notifications
+  
+  NotificationsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+                - cloudwatch.amazonaws.com
+            Action: 'sns:Publish'
+            Resource: '*'
+      Topics:
+        - !Ref Notifications
+  
+  # Filter to detect KinesisAnalyticsErrors logged by Analytics Processing Function
+  KinesisAnalyticsErrorsFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.KinesisAnalyticsErrors > 0 }'
+      LogGroupName: !Ref AnalyticsProcessingLogGroup
+      MetricTransformations:
+        - MetricValue: $.KinesisAnalyticsErrors
+          MetricName: 'KinesisAnalyticsErrors'
+          MetricNamespace: !Sub '${AWS::StackName}/AWSGameAnalytics'
+  
+  # Generate Alarm if count of KinesisAnalyticsErrors is greater than 1
+  KinesisAnalyticsErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'Kinesis Analytics Errors is > 0, as logged by the Analytics Processing function. Stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      Metrics:
+        - Id: kda_errors
+          MetricStat:
+            Metric:
+              MetricName: KinesisAnalyticsErrors
+              Namespace: !Sub '${AWS::StackName}/AWSGameAnalytics'
+            Period: 300
+            Stat: Sum
+          ReturnData: true
+      Threshold: 0
+      TreatMissingData: notBreaching
+  
+  # Generate Alarms for the solution's Applications and Authorizations DynamoDB tables
+  DynamoDBErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'DynamoDB Errors > 0, for stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 6
+      Metrics:
+        - Id: s1
+          Expression: m1+m2+m3+m4
+        - Id: m1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref AuthorizationsTable
+              MetricName: UserErrors
+              Namespace: AWS/DynamoDB
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref AuthorizationsTable
+              MetricName: SystemErrors
+              Namespace: AWS/DynamoDB
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m3
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref ApplicationsTable
+              MetricName: UserErrors
+              Namespace: AWS/DynamoDB
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m4
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref ApplicationsTable
+              MetricName: UserErrors
+              Namespace: AWS/DynamoDB
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      Threshold: 0
+      TreatMissingData: notBreaching
+  
+  # Track the Applications Table for any throttling caused by Events Processing queries
+  ApplicationsOnDemandTableReadLimitAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub 'Alarm when consumed table reads approach the account limit for Applications table, for stack ${AWS::StackName}'
+      AlarmActions:
+        - !Ref Notifications
+      Metrics:
+        - Id: 'e1'
+          Expression: '(((m1 / 300) / m2) * 100)'
+          Label: TableReadsOverMaxReadLimit
+        - Id: 'm1'
+          MetricStat:
+            Metric:
+              Namespace: AWS/DynamoDB
+              MetricName: ConsumedReadCapacityUnits
+              Dimensions:
+                - Name: TableName
+                  Value: !Ref ApplicationsTable
+            Period: 300
+            Stat: SampleCount
+            Unit: Count
+          ReturnData: False
+        - Id: 'm2'
+          MetricStat:
+            Metric:
+              Namespace: AWS/DynamoDB
+              MetricName: AccountMaxTableLevelReads
+            Period: 300
+            Stat: Maximum
+          ReturnData: False
+      EvaluationPeriods: 2
+      Threshold: 90
+      ComparisonOperator: 'GreaterThanThreshold'
+  
+  # Track the ApiKeyValues DynamoDB GSI for any throttling caused by Lamdba Authorizer queries
+  AuthorizationsGSIOnDemandTableReadLimitAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub 'Alarm when consumed table reads approach the account limit for Authorizations GSI, for stack ${AWS::StackName}'
+      AlarmActions:
+        - !Ref Notifications
+      Metrics:
+        - Id: 'e1'
+          Expression: '(((m1 / 300) / m2) * 100)'
+          Label: TableReadsOverMaxReadLimit
+        - Id: 'm1'
+          MetricStat:
+            Metric:
+              Namespace: AWS/DynamoDB
+              MetricName: 'ConsumedReadCapacityUnits'
+              Dimensions:
+                - Name: 'TableName'
+                  Value: !Ref AuthorizationsTable
+                - Name: 'GlobalSecondaryIndexName'
+                  Value: 'ApiKeyValues'
+            Period: 300
+            Stat: 'SampleCount'
+            Unit: 'Count'
+          ReturnData: False
+        - Id: 'm2'
+          MetricStat:
+            Metric:
+              Namespace: 'AWS/DynamoDB'
+              MetricName: 'AccountMaxTableLevelReads'
+            Period: 300
+            Stat: 'Maximum'
+          ReturnData: False
+      EvaluationPeriods: 2
+      Threshold: 90
+      ComparisonOperator: 'GreaterThanThreshold'
+      
+  ApiGateway4XXErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'API Gateway 4XX Errors > 1%, for stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 6
+      Metrics:
+        - Id: s1
+          Expression: m1/m2*100
+        - Id: m1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: ApiName
+                  Value: !Sub 'GameAnalyticsApi-${AWS::StackName}'
+              MetricName: 4XXError
+              Namespace: AWS/ApiGateway
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: ApiName
+                  Value: !Sub 'GameAnalyticsApi-${AWS::StackName}'
+              MetricName: Count
+              Namespace: AWS/ApiGateway
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  ApiGateway5XXErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'API Gateway 5XX Errors > 1%, for stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 6
+      Metrics:
+        - Id: s1
+          Expression: m1/m2*100
+        - Id: m1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: ApiName
+                  Value: !Sub 'GameAnalyticsApi-${AWS::StackName}'
+              MetricName: 5XXError
+              Namespace: AWS/ApiGateway
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: ApiName
+                  Value: !Sub 'GameAnalyticsApi-${AWS::StackName}'
+              MetricName: Count
+              Namespace: AWS/ApiGateway
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      Threshold: 1
+      TreatMissingData: notBreaching
+  
+  KinesisFirehoseFailedConversions:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub 'Alarm to track when Firehose Format Conversion fails, for stack ${AWS::StackName}'
+      MetricName: FailedConversion.Records
+      Dimensions:
+        - Name: DeliveryStreamName
+          Value: !Ref GameEventsFirehose
+      Namespace: AWS/Firehose
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 0
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref Notifications
+      ActionsEnabled: true
+  
+  KinesisFirehoseS3DataFreshness:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub 'Alarm to track when age of oldest record delivered to S3 exceeds 15 minutes for two consecutive periods, for stack ${AWS::StackName}'
+      MetricName: DeliveryToS3.DataFreshness
+      Dimensions:
+        - Name: DeliveryStreamName
+          Value: !Ref GameEventsFirehose
+      Namespace: AWS/Firehose
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 900
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref Notifications
+      ActionsEnabled: true
+    
+  KinesisReadProvisionedThroughputExceeded:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub 'Kinesis stream is being throttled on reads and may need to be be scaled to support more read throughput, for stack ${AWS::StackName}'
+      MetricName: ReadProvisionedThroughputExceeded
+      Dimensions:
+        - Name: StreamName
+          Value: !Ref GameEventsStream
+      Namespace: AWS/Kinesis
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 0
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref Notifications
+      ActionsEnabled: true
+  
+  KinesisWriteProvisionedThroughputExceeded:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub 'Kinesis stream is being throttled on writes and may need to be be scaled to support more write throughput, for stack ${AWS::StackName}'
+      MetricName: ReadProvisionedThroughputExceeded
+      Dimensions:
+        - Name: StreamName
+          Value: !Ref GameEventsStream
+      Namespace: AWS/Kinesis
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 0
+      TreatMissingData: notBreaching
+      AlarmActions:
+          - !Ref Notifications
+      ActionsEnabled: true
+  
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'Lambda Errors > 0, for stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 6
+      Metrics:
+        - Id: s1
+          Expression: m1+m2+m3+m4+m5
+        - Id: m1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref EventsProcessingFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref LambdaAuthorizer
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m3
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AnalyticsProcessingFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m4
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref ApplicationAdminServiceFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m5
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref GluePartitionCreator
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      Threshold: 0
+      TreatMissingData: notBreaching
+  
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'Lambda Throttles > 0, for stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 2
+      Metrics:
+        - Id: s1
+          Expression: m1+m2+m3+m4+m5
+        - Id: m1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref EventsProcessingFunction
+              MetricName: Throttles
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m2
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref LambdaAuthorizer
+              MetricName: Throttles
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m3
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AnalyticsProcessingFunction
+              MetricName: Throttles
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m4
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref ApplicationAdminServiceFunction
+              MetricName: Throttles
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+        - Id: m5
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref GluePartitionCreator
+              MetricName: Throttles
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      Threshold: 0
+      TreatMissingData: notBreaching
+  
+Outputs:
+  AnalyticsBucket:
+    Description: 'S3 Bucket for game analytics storage'
+    Value: !Ref AnalyticsBucket
+  GameEventsStream:
+    Description: 'Kinesis Stream for ingestion of raw events'
+    Value: !Ref GameEventsStream
+  GameEventsEtlJob:
+    Description: 'ETL Job for processing game events into optimized format for analytics'
+    Value: !Ref GameEventsEtlJob
+  GameEventsDatabase:
+    Description: 'Glue Catalog Database for storing game analytics events'
+    Value: !Ref GameEventsDatabase
+  ApplicationsTable:
+    Description: 'Configuration table for storing registered applications that are allowed by the solution pipeline'
+    Value: !Ref ApplicationsTable
+  KinesisAnalyticsApp:
+    Description: 'Name of the Kinesis Analytics Application for game analytics'
+    Value: !Ref KinesisAnalyticsApp
+    Condition: StreamingAnalytics 
+  GlueWorkflowConsoleLink:
+    Description: Link to the AWS Glue Workflows console page to view details of the workflow
+    Value: !Sub 'https://console.aws.amazon.com/glue/home?region=${AWS::Region}#etl:tab=workflows;workflowView=workflow-list'
+  TestApiKeyId:
+    Description: 'The identifier of the test api key that was created with the solution.'
+    Value: !GetAtt CreateApiAuthorization.apiKeyId
+    Condition: ConfigureDevMode
+  TestApplicationId:
+    Description: 'The identifier of the test application that was created with the solution'
+    Value: !GetAtt CreateDefaultApplication.application_id
+    Condition: ConfigureDevMode
+  RealTimeAnalyticsCloudWatch:
+    Description: Link to the Amazon CloudWatch namespace where custom metrics are published by the solution AnalyticsProcessingFunction.
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#metricsV2:graph=~();query=${AWS::StackName}/AWSGameAnalytics'
+    Condition: StreamingAnalytics
+  ApiBasePath:
+    Description: The base path of the Solution API
+    Value:
+      !Join
+        - ''
+        - - !Sub 'https://${GameAnalyticsApi}.execute-api.${AWS::Region}.amazonaws.com/'
+          - !FindInMap [ApiConfiguration, StageSettings, StageName]
+  PipelineOperationsDashboard:
+    Description: 'CloudWatch Dashboard for viewing pipeline metrics'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${PipelineOpsDashboard};start=PT1H'
+  ApiGatewayExecutionLogs:
+    Description: 'CloudWatch Log Group containing the API execution logs'
+    Value:
+      !Join
+        - ''
+        - - !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#logsV2:log-groups/log-group/API-Gateway-Execution-Logs_${GameAnalyticsApi}%252F'
+          - !FindInMap [ApiConfiguration, StageSettings, StageName]

@@ -1,0 +1,572 @@
+{
+	"info": {
+		"_postman_id": "8668ec36-a7a0-44af-a47a-95fa7bf344c3",
+		"name": "game-analytics-pipeline",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Applications",
+			"item": [
+				{
+					"name": "Create application",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "3524b442-27a8-4a57-a867-b41f7f768ef0",
+								"exec": [
+									"pm.variables.get(\"application_id\");",
+									"pm.variables.get(\"api_base_path\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"type": "text",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"Name\": \"SampleGame\",\n\t\"Description\": \"Description for a game\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{api_base_path}}/applications",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications"
+							]
+						},
+						"description": "/registrations"
+					},
+					"response": []
+				},
+				{
+					"name": "List applications",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "{{api_base_path}}/applications",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications"
+							]
+						},
+						"description": "/registrations"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete application",
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_path}}/applications/{{application_id}}",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications",
+								"{{application_id}}"
+							]
+						},
+						"description": "/registrations/{registrationId}"
+					},
+					"response": []
+				},
+				{
+					"name": "Get application details",
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_path}}/applications/{{application_id}}",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications",
+								"{{application_id}}"
+							]
+						},
+						"description": "/registrations/{registrationId}"
+					},
+					"response": []
+				}
+			],
+			"protocolProfileBehavior": {}
+		},
+		{
+			"name": "Authorizations",
+			"item": [
+				{
+					"name": "Create Authorization",
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"Name\": \"SampleKey\",\n    \"Description\": \"API Key for sending events\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{api_base_path}}/applications/{{application_id}}/authorizations",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications",
+								"{{application_id}}",
+								"authorizations"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Modify API Key authorization",
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"Enabled\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{api_base_path}}/applications/{{application_id}}/authorizations/<Insert an ApiKeyId here>",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications",
+								"{{application_id}}",
+								"authorizations",
+								"<Insert an ApiKeyId here>"
+							]
+						},
+						"description": "PUT /applications/{applicationId}/authorizations/{apiKeyId}"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete authorization",
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{api_base_path}}/applications/{{application_id}}/authorizations/<Insert an ApiKeyId here>",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications",
+								"{{application_id}}",
+								"authorizations",
+								"<Insert an ApiKeyId here>"
+							]
+						},
+						"description": "/registrations/{registrationId}/authorizations"
+					},
+					"response": []
+				},
+				{
+					"name": "List authorizations",
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_path}}/applications/{{application_id}}/authorizations",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications",
+								"{{application_id}}",
+								"authorizations"
+							]
+						},
+						"description": "/registrations/{registrationId}/authorizations"
+					},
+					"response": []
+				},
+				{
+					"name": "Get authorization details",
+					"request": {
+						"auth": {
+							"type": "awsv4",
+							"awsv4": [
+								{
+									"key": "region",
+									"value": "{{region}}",
+									"type": "string"
+								},
+								{
+									"key": "secretKey",
+									"value": "{{secret_access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "accessKey",
+									"value": "{{access_key}}",
+									"type": "string"
+								},
+								{
+									"key": "service",
+									"value": "",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{api_base_path}}/applications/{{application_id}}/authorizations/<Insert an ApiKeyId here>",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications",
+								"{{application_id}}",
+								"authorizations",
+								"<Insert an ApiKeyId here>"
+							]
+						},
+						"description": "/registrations/{registrationId}/authorizations/{apiKeyId}"
+					},
+					"response": []
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"id": "859fee62-cef0-4f68-917b-204440934396",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"id": "177b2390-18c5-4f4c-8223-87f7030b9d1b",
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			],
+			"protocolProfileBehavior": {}
+		},
+		{
+			"name": "Events",
+			"item": [
+				{
+					"name": "Send events",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"id": "629d4b60-ee44-4e9e-b9bd-c1a8bdf7b9e8",
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"protocolProfileBehavior": {
+						"disabledSystemHeaders": {
+							"content-type": true
+						}
+					},
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"name": "Content-Type",
+								"type": "text",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Insert an ApiKeyValue here",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"events\": [\n\t\t{\n\t        \"event_id\": \"eb9815cd-2972-418d-b707-c4e7f9e5c6c8\",\n\t        \"client_id\": \"8f733b30-f883-4f65-8380-306eb178d996\",\n\t        \"event_timestamp\": 1586736484,\n\t        \"event_type\": \"player_death\",\n\t        \"event_name\": \"player_death\",\n\t        \"event_data\": {\n\t        \t\"death_reason_code\": \"FALL\",\n\t        \t\"weapon_code\": 1\n\t        }\n\t    },\n\t    {\n\t        \"event_id\": \"eb9815cd-2972-418d-b707-c4e7f9e5c6c8\",\n\t        \"client_id\": \"8f733b30-f883-4f65-8380-306eb178d996\",\n\t        \"event_timestamp\": 1586736484,\n\t        \"event_type\": \"player_death\",\n\t        \"event_name\": \"player_death\",\n\t        \"event_data\": {\n\t        \t\"death_reason_code\": \"FALL\",\n\t        \t\"weapon_code\": 1\n\t        }\n\t    },\n\t    {\n\t        \"event_id\": \"eb9815cd-2972-418d-b707-c4e7f9e5c6c8\",\n\t        \"client_id\": \"8f733b30-f883-4f65-8380-306eb178d996\",\n\t        \"event_timestamp\": 1586736484,\n\t        \"event_type\": \"player_death\",\n\t        \"event_name\": \"player_death\",\n\t        \"event_data\": {\n\t        \t\"death_reason_code\": \"FALL\",\n\t        \t\"weapon_code\": 1\n\t        }\n\t    },\n\t    {\n\t        \"event_id\": \"eb9815cd-2972-418d-b707-c4e7f9e5c6c8\",\n\t        \"client_id\": \"8f733b30-f883-4f65-8380-306eb178d996\",\n\t        \"event_timestamp\": 1586736484,\n\t        \"event_type\": \"player_death\",\n\t        \"event_name\": \"player_death\",\n\t        \"event_data\": {\n\t        \t\"death_reason_code\": \"FALL\",\n\t        \t\"weapon_code\": 1\n\t        }\n\t    },\n\t    {\n\t        \"event_id\": \"eb9815cd-2972-418d-b707-c4e7f9e5c6c8\",\n\t        \"client_id\": \"8f733b30-f883-4f65-8380-306eb178d996\",\n\t        \"event_timestamp\": 1586736484,\n\t        \"event_type\": \"player_death\",\n\t        \"event_name\": \"player_death\",\n\t        \"event_data\": {\n\t        \t\"death_reason_code\": \"FALL\",\n\t        \t\"weapon_code\": 1\n\t        }\n\t    }\n\t]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{api_base_path}}/applications/{{application_id}}/events",
+							"host": [
+								"{{api_base_path}}"
+							],
+							"path": [
+								"applications",
+								"{{application_id}}",
+								"events"
+							]
+						},
+						"description": "/events"
+					},
+					"response": []
+				}
+			],
+			"protocolProfileBehavior": {}
+		}
+	],
+	"protocolProfileBehavior": {}
+}
