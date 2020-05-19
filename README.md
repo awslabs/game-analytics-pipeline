@@ -31,21 +31,16 @@ git clone https://github.com/awslabs/game-analytics-pipeline.git
 #### 3. Configure environment:
 The solution build script requires environment variables to be configured prior to building the solution Configure the below environment variables:
 
-- **AWS_REGION**: AWS region code. Ex: ```us-east-1```, ```us-west-2``` ...
-- **VERSION**: Version of the packaged artifacts. Ex: ```v1.0.0```
-- **SOLUTION_NAME**: A name for the solution. Used to store deployment artifacts in S3 under a common prefix.
-- **DIST_OUTPUT_BUCKET**: Name for the S3 bucket location where the template will source the Lambda code from. i.e ```solution-build-output-us-east-1```
-
-Example: 
-
 ```
 export AWS_REGION=<AWS Region code>
 export VERSION=<version>
 export SOLUTION_NAME=<Provide a name solution name>   
-export DIST_OUTPUT_BUCKET=<S3 Bucket Name. A region code will be appended to this name to store regional assets>
+export DIST_OUTPUT_BUCKET=<A name used for the S3 Bucket>
 ```
 
 #### 4. Create an S3 Bucket for storing build artifacts in a supported AWS Region:
+
+Create an S3 bucket with the region code appended to the name of the bucket, so that AWS CloudFormation can reference regionally hosted assets.
 
 ```
 aws s3 mb s3://$DIST_OUTPUT_BUCKET-$AWS_REGION --region $AWS_REGION
@@ -88,7 +83,7 @@ aws cloudformation deploy --template-file ./global-s3-assets/game-analytics-pipe
 ``` 
 |-deployment/ 
   |-build-s3-dist.sh  [ shell script for packaging distribution assets ] 
-  |-game-analytics-pipeline.yaml  [ CloudFormation deployment template ] 
+  |-game-analytics-pipeline.template  [ CloudFormation deployment template ] 
 |-source/ 
   |-services/
     |-events_processing/ [ source code for lambda function that processes ingested events ]

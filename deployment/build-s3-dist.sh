@@ -56,12 +56,12 @@ do_cmd mkdir -p $template_dir/dist
 echo "------------------------------------------------------------------------------" 
 echo "Packaging templates" 
 echo "------------------------------------------------------------------------------" 
-do_cmd cp $template_dir/game-analytics-pipeline.yaml $template_dir/dist/
+do_cmd cp $template_dir/game-analytics-pipeline.template $template_dir/dist/
 
 echo "------------------------------------------------------------------------------" 
 echo "Updating Bucket name"
 echo "------------------------------------------------------------------------------" 
-for file in $template_dir/dist/*.yaml
+for file in $template_dir/dist/*.template
 do
 	do_replace $file '%%BUCKET_NAME%%' $bucket
 done
@@ -70,7 +70,7 @@ done
 echo "------------------------------------------------------------------------------" 
 echo "Updating Solution name"
 echo "------------------------------------------------------------------------------" 
-for file in $template_dir/dist/*.yaml
+for file in $template_dir/dist/*.template
 do
 	do_replace $file '%%SOLUTION_NAME%%' $tmsn
 done
@@ -79,7 +79,7 @@ done
 echo "------------------------------------------------------------------------------" 
 echo "Updating version name"
 echo "------------------------------------------------------------------------------" 
-for file in $template_dir/dist/*.yaml
+for file in $template_dir/dist/*.template
 do
 	do_replace $file '%%VERSION%%' $version
 done
@@ -137,7 +137,7 @@ echo "--------------------------------------------------------------------------
 echo "Package AWS SAM template into CloudFormation"
 echo "------------------------------------------------------------------------------"
 do_cmd cd $template_dir/dist
-do_cmd aws cloudformation package --template-file ./game-analytics-pipeline.yaml --s3-bucket $bucket --output-template-file ../global-s3-assets/game-analytics-pipeline.template
+do_cmd aws cloudformation package --template-file ./game-analytics-pipeline.template --s3-bucket $bucket --output-template-file ../global-s3-assets/game-analytics-pipeline.template
 
 echo "------------------------------------------------------------------------------"  
 echo "Completed building distribution"
