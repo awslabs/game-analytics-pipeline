@@ -1,7 +1,7 @@
 # AWS Game Analytics Pipeline Solution
 Many Amazon Web Services (AWS) games customers want to build their own custom analytics solutions that provide flexibility and customization without the complexity of managing infrastructure. 
 
-The [Game Analytics Pipeline](https://aws.amazon.com/solutions/game-analytics-pipeline/) Solution is a reference implementation of a serverless analytics pipeline that provides a solution for ingesting telemetry events from games and backend services. The solution addresses both real-time and batch analytics and integrates with AWS Glue and Amazon Simple Storage Service (Amazon S3) to provide data lake integration and cost effective storage.
+The [Game Analytics Pipeline](https://aws.amazon.com/solutions/implementations/game-analytics-pipeline/) Solution is a reference implementation of a serverless analytics pipeline that provides a solution for ingesting telemetry events from games and backend services. The solution addresses both real-time and batch analytics and integrates with AWS Glue and Amazon Simple Storage Service (Amazon S3) to provide data lake integration and cost effective storage.
 
 ## Getting Started
 
