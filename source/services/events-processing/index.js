@@ -28,7 +28,7 @@ exports.handler = function(event, context, callback) {
   console.log(`Events processing service received event`);
 
   lib
-    .respond(event)
+    .respond(event, context)
     .then(data => {
       return callback(null, data);
     })

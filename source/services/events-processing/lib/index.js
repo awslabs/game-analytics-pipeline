@@ -32,7 +32,7 @@ const Event = require('./event.js');
  */
 global.applicationsCache = new NodeCache({stdTTL: process.env.CACHE_TIMEOUT_SECONDS, checkPeriod: 60, maxKeys: 1000, useClones: false});
 
-const respond = async event => {
+const respond = async (event, context) => {
   let validEvents = 0;
   let invalidEvents = 0;
   let results = [];
@@ -42,7 +42,7 @@ const respond = async event => {
     try {
       // Kinesis data is base64 encoded so decode here
       const payload = JSON.parse(Buffer.from(record.data, 'base64'));
-      const processEvent = await _event.processEvent(payload, record.recordId);
+      const processEvent = await _event.processEvent(payload, record.recordId, context);
       if (processEvent.result === 'Ok') {
         validEvents++;
       } else {

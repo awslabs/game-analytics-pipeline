@@ -26,7 +26,7 @@ import numpy
 import argparse
 
 # Event Payload defaults
-DEFAULT_EVENT_VERSION = '1.0'
+DEFAULT_EVENT_VERSION = '1.0.0'
 DEFAULT_BATCH_SIZE = 100
 
 def parse_cmd_line():
@@ -66,7 +66,7 @@ def getUUIDs(dataType, count):
 def getEventType():
   event_types = {
         1: 'user_registration',
-        2: 'user_kill',
+        2: 'user_knockout',
         3: 'item_viewed',
         4: 'iap_transaction',
         5: 'login',
@@ -85,7 +85,7 @@ def getEventType():
         18: 'user_report',
         19: 'user_sentiment'
   }
-  return event_types[random.randint(1,19)]
+  return event_types[numpy.random.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], 1, p=[0.04, 0.05, 0.18, 0.02, 0.1, 0.06, 0.04, 0.03, 0.025, 0.025, 0.01, 0.03, 0.03, 0.08, 0.08, 0.08, 0.04, 0.04, 0.04])[0]]
   
 # Generate a randomized event from preconfigured sample data
 def getEvent(event_type):
@@ -135,7 +135,7 @@ def getEvent(event_type):
         '1_INTRO',
         '2_MOVEMENT',
         '3_WEAPONS',
-        '4_FINISH',
+        '4_FINISH'
     ]
 
     match_types = [
@@ -164,10 +164,11 @@ def getEvent(event_type):
         'QUIT'
     ]
 
-    weapons = [
-        'KNIFE',
-        'SHOTGUN',
-        'AR-15'
+    spells = [
+        'WATER',
+        'EARTH',
+        'FIRE',
+        'AIR'
     ]
     
     ranks = [
@@ -224,19 +225,16 @@ def getEvent(event_type):
             }
         },
         
-        'user_kill': {
+        'user_knockout': {
             'event_data': {
                 'match_id': str(random.choice(MATCHES)),
                 'map_id': str(numpy.random.choice(maps, 1, p=[0.6, 0.3, 0.1])[0]),
-                'clan_id': str(random.choice(CLANS)),
-                'user_killed_id': str(random.choice(USERS)),
-                'user_killed_clan_id': str(random.choice(CLANS)),
-                'weapon_id': str(numpy.random.choice(weapons, 1, p=[0.1, 0.4, 0.5])[0]),
+                'spell_id': str(numpy.random.choice(spells, 1, p=[0.1, 0.4, 0.3, 0.2])[0]),
                 'exp_gained': random.randint(1,2)
             }
         },
         
-         'item_viewed': {
+        'item_viewed': {
              'event_data': {
                 'item_id': str(numpy.random.choice(items, 1, p=[0.125, 0.11, 0.35, 0.125, 0.04, 0.01, 0.07, 0.1, 0.05, 0.02])[0]),
                 'item_version': random.randint(1,2)
@@ -295,8 +293,7 @@ def getEvent(event_type):
         'match_start': {
             'event_data': {
                 'match_id': str(random.choice(MATCHES)),
-                'map_id': str(numpy.random.choice(maps, 1, p=[0.3, 0.3, 0.4])[0]),
-                'clan_id': str(random.choice(CLANS)),
+                'map_id': str(numpy.random.choice(maps, 1, p=[0.3, 0.3, 0.4])[0])
             }
         },
 
@@ -304,10 +301,9 @@ def getEvent(event_type):
             'event_data': {
                 'match_id': str(random.choice(MATCHES)),
                 'map_id': str(numpy.random.choice(maps, 1, p=[0.3, 0.3, 0.4])[0]),
-                'clan_id': str(random.choice(CLANS)),
                 'match_result_type': str(numpy.random.choice(game_results, 1, p=[0.4, 0.4, 0.05, 0.05, 0.1])[0]),
                 'exp_gained': random.randrange(start=100, stop=200),
-                'most_used_weapon': str(numpy.random.choice(weapons, 1, p=[0.1, 0.4, 0.5])[0])
+                'most_used_spell': str(numpy.random.choice(spells, 1, p=[0.1, 0.4, 0.2, 0.3])[0])
             }
         },
         
@@ -319,7 +315,7 @@ def getEvent(event_type):
         },
         'level_completed': {
             'event_data': {
-                'level_id': str(numpy.random.choice(levels, 1, p=[0.4, 0.25, 0.2, 0.1, 0.05])[0]),
+                'level_id': str(numpy.random.choice(levels, 1, p=[0.6, 0.2, 0.12, 0.05, 0.03])[0]),
                 'level_version': random.randint(1,2)
             }
         },
@@ -340,11 +336,10 @@ def getEvent(event_type):
                 'item_cost': random.randint(1,5)
             }
         },
-        
+
         'user_report': {
             'event_data': {
                 'report_id': str(uuid.uuid4()),
-                'reported_user': str(random.choice(USERS)),
                 'report_reason': str(numpy.random.choice(report_reasons, 1, p=[0.2, 0.5, 0.1, 0.2])[0])
             }
         },
@@ -362,7 +357,6 @@ def getEvent(event_type):
 # Take an event type, get event data for it and then merge that event-specific data with the default event fields to create a complete event
 def generate_event():
     event_type = getEventType()
-    
     # Within the demo script the event_name is set same as event_type for simplicity.
     # In many use cases multiple events could exist under a common event type which can enable you to build a richer data taxonomy.
     event_name = event_type
@@ -373,9 +367,7 @@ def generate_event():
         'event_type': event_type,
         'event_name': event_name,
         'event_timestamp': int(time.time()),
-        'client_id': str(random.choice(CLIENTS)),
-        'user_id': str(random.choice(USERS)),
-        'session_id': str(random.choice(SESSIONS))
+        'app_version': str(numpy.random.choice(['1.0.0', '1.1.0', '1.2.0'], 1, p=[0.05, 0.80, 0.15])[0])
     }
     
     event.update(event_data)
@@ -387,16 +379,15 @@ def send_record_batch(kinesis_client, stream_name, raw_records):
     # Translate input records into the format needed by the boto3 SDK
     formatted_records = []
     for rec in raw_records:
-        formatted_records.append({'PartitionKey': rec['event']['client_id'], 'Data': json.dumps(rec)})
+        formatted_records.append({'PartitionKey': rec['event']['event_id'], 'Data': json.dumps(rec)})
     kinesis_client.put_records(StreamName=stream_name, Records=formatted_records)
     print('Sent %d records to stream %s.' % (len(formatted_records), stream_name))
 
-def send_events_infinite(kinesis_client, stream_name, batch_size, registration_id):
+def send_events_infinite(kinesis_client, stream_name, batch_size, application_id):
     """Send a batches of randomly generated events to Amazon Kinesis."""
     
     while True:
         records = []
-
         # Create a batch of random events to send
         for i in range(0, batch_size):
             event_dict = generate_event()
@@ -406,7 +397,7 @@ def send_events_infinite(kinesis_client, stream_name, batch_size, registration_i
             }
             records.append(record)
         send_record_batch(kinesis_client, stream_name, records)
-        time.sleep(1.0)
+        time.sleep(random.randint(1,7))
 
 if __name__ == '__main__':
     args = parse_cmd_line()
@@ -420,21 +411,11 @@ if __name__ == '__main__':
     print('- KINESIS_STREAM: ' + kinesis_stream)
     print('- AWS_REGION: ' + aws_region)
     print('- APPLICATION_ID: ' + application_id)
-    CLIENTS = getUUIDs('clients', 115)
-    USERS = getUUIDs('users', 115)
     SERVERS = getUUIDs('servers', 3)
-    CLANS = getUUIDs('clans', 5)
     MATCHES = getUUIDs('matches', 50)
-    SESSIONS = getUUIDs('sessions', 115)
-    print('Generated ' + str(len(CLIENTS)) + ' clients')
-    print('Generated ' + str(len(USERS)) + ' users')
-    print('Generated ' + str(len(SERVERS)) + ' servers')
-    print('Generated ' + str(len(CLANS)) + ' clans')
-    print('Generated ' + str(len(MATCHES)) + ' matches')
-    print('Generated ' + str(len(SESSIONS)) + ' sessions')
     print('===========================================\n')
     
-    session = boto3.Session(profile_name='default')
+    session = boto3.Session()
     client = session.client('kinesis', region_name=aws_region)
     
     send_events_infinite(client, kinesis_stream, batch_size, application_id)

@@ -7,7 +7,7 @@ The [Game Analytics Pipeline](https://aws.amazon.com/solutions/implementations/g
 
 The solution source artifacts are provided in this repository to enable customization to the game analytics pipeline solution before deployment. To customize the solution source code and templates, an S3 Bucket is required to host assets used during the build and deployment process.
 
-The build script provided with the solution can be run manually from a command line or can be executed within an automated build/release pipeline. The build script has been tested on Amazon Linux 2 platform. [AWS CodeBuild](https://aws.amazon.com/codebuild/) can be used to automated the build process and provides a variety of custom build environments, including Amazon Linux 2.
+The build script provided with the solution can be run manually from a command line or can be executed within an automated build/release pipeline. The build script has been tested on Amazon Linux 2 platform. [AWS CodeBuild](https://aws.amazon.com/codebuild/) can be used to automate the build process and provides a variety of custom build environments that you can choose from, including Amazon Linux 2.
 
 #### 1. Prerequisites
 The following procedures assumes that all of the OS-level configuration has been completed. They are:
@@ -29,13 +29,13 @@ git clone https://github.com/awslabs/game-analytics-pipeline.git
 > The build process requires the use of an Amazon S3 Bucket to store packaged artifacts. The build script packages the AWS Lambda Functions into zip files and stores them in the S3 Bucket for reference by the CloudFormation template during deployment. The S3 Bucket must exist in the same AWS Region where the CloudFormation template will be deployed. 
 	
 #### 3. Configure environment:
-The solution build script requires environment variables to be configured prior to building the solution Configure the below environment variables:
+The solution build script requires environment variables to be configured prior to building the solution. Configure the below environment variables:
 
 ```
 export AWS_REGION=<AWS Region code>
-export VERSION=<version>
-export SOLUTION_NAME=<Provide a name solution name>   
-export DIST_OUTPUT_BUCKET=<A name used for the S3 Bucket>
+export VERSION=<Provide a version for your deployment. Build output artficats are stored in S3 prefix using this version name>
+export SOLUTION_NAME=<Provide a solution name for your deployment>   
+export DIST_OUTPUT_BUCKET=<A name used for the S3 Bucket that will host build output artifacts>
 ```
 
 #### 4. Create an S3 Bucket for storing build artifacts in a supported AWS Region:
@@ -49,8 +49,7 @@ aws s3 mb s3://$DIST_OUTPUT_BUCKET-$AWS_REGION --region $AWS_REGION
 > Note: In order to simplify the solution deployment, the build script automatically builds and re-packages each AWS Lambda Function during each build script execution. The script can be modified to support custom build and deployment requirements and the environment variables can be configured automatically in build tools, including AWS CodeBuild.
 
 #### 5. Build the game analytics pipeline solution for deployment:
-Make any modifications or customizations to the solution source code and template, and then use the below commands to build the solution:
-
+Execute the following commands to build the solution:
 
 ``` 
 cd ./deployment
@@ -76,7 +75,6 @@ aws cloudformation deploy --template-file ./global-s3-assets/game-analytics-pipe
 ```
 
 > Include optional parameters as needed, for example to receive SNS notifications from solution alarms, use ```--parameter-overrides SolutionAdminEmailAddress=<EMAIL_ADDRESS>```. A confirmation email is sent to the email address to verify subscription to the SNS Topic.
-
 
 ## File Structure 
  

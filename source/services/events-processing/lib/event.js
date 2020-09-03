@@ -21,7 +21,6 @@
 const AWS = require('aws-sdk');
 const _ = require('underscore');
 const moment = require('moment');
-const { v4: uuidv4 } = require('uuid');
 const event_schema = require('../config/event_schema.json');
 const Ajv = require('ajv');
 
@@ -48,22 +47,36 @@ class Event {
   * Format processing output in format required by Kinesis Firehose
   * @param {JSON} input - game event input payload
   * @param {string} recordId - recordId from Kinesis
+  * @param {JSON} context - AWS Lambda invocation context (https://docs.aws.amazon.com/lambda/latest/dg/nodejs-context.html)
   */
-  async processEvent(input, recordId) {
+  async processEvent(input, recordId, context) {
     const _self = this;
     try {
-      
-      // Extract event object and applicationId string from payload
+      // Extract event object and applicationId string from payload. application_id and event are required or record fails processing
+      if(!input.hasOwnProperty('application_id')){
+        return Promise.reject({
+          recordId: recordId,
+          result: 'ProcessingFailed',
+          data: new Buffer.from(JSON.stringify(input) + '\n').toString('base64')
+        });
+      }
+      if(!input.hasOwnProperty('event')){
+        return Promise.reject({
+          recordId: recordId,
+          result: 'ProcessingFailed',
+          data: new Buffer.from(JSON.stringify(input) + '\n').toString('base64')
+        });
+      }
       const applicationId = input.application_id;
       const event = input.event;
-      // Build metadata to attach to transformed event, including a unique ingestion_id
+      
+      // Add a processing timestamp and the Lambda Request Id to the event metadata
       let metadata = {
-        ingestion_id: uuidv4(),
+        ingestion_id: context.awsRequestId,
         processing_timestamp: moment().unix()
       };
       
       // If event came from Solution API, it should have extra metadata
-      // Add sourceIp, requestId and requestTime 
       if (input.aws_ga_api_validated_flag) {
         metadata.api = {};
         if (input.aws_ga_api_requestId) { 
@@ -72,9 +85,6 @@ class Event {
         if (input.aws_ga_api_requestTimeEpoch) {
           metadata.api.request_time_epoch = input.aws_ga_api_requestTimeEpoch;
         }
-        if (input.aws_ga_api_sourceIp) {
-          metadata.api.source_ip = input.aws_ga_api_sourceIp;
-        }
       }
       
       // Retrieve application config from Applications table
@@ -82,68 +92,88 @@ class Event {
       if (application !== null) {
         // Validate the input record against solution event schema
         const schemaValid = await _self.validateSchema(input);
-        if (!schemaValid) {
-          let errors = validate.errors;
-          /**
-           * Transform schema mismatch events into custom event format
-           */
+        let transformed_event = {};
+        if (schemaValid.validation_result == 'schema_mismatch') {
           metadata.processing_result = {
-            status: 'schema_mismatch'
+            status: 'schema_mismatch',
+            validation_errors: schemaValid.validation_errors
           };
-          let custom_event_format = {
-            application_id: applicationId,
-            application_name: application.application_name,
-            metadata: metadata,
-            custom_event: event
-          };
-          console.log(`Errors processing event: ${JSON.stringify(errors)}`);
-          return Promise.resolve({
-            recordId: recordId,
-            result: 'Ok',
-            data: new Buffer.from(JSON.stringify(custom_event_format) + '\n').toString('base64')
-          });
+          transformed_event.metadata = metadata;
+          //console.log(`Errors processing event: ${JSON.stringify(errors)}`);
         } else {
-          
-          /**
-           * Generate standard event format populated with validated fields
-           */
           metadata.processing_result = {
             status: 'ok'
           };
-          let standard_format = {
-            event_id: event.event_id,
-            event_type: event.event_type,
-            event_name: event.event_name,
-            event_version: event.event_version,
-            event_timestamp: event.event_timestamp,
-            client_id: event.client_id,
-            event_data: event.event_data,
-            user_id: event.user_id,
-            session_id: event.session_id,
-            application_name: application.application_name,
-            application_id: applicationId,
-            metadata: metadata
-          };
-          return Promise.resolve({
-            recordId: recordId,
-            result: 'Ok',
-            data: new Buffer.from(JSON.stringify(standard_format) + '\n').toString('base64')
-          });
+          transformed_event.metadata = metadata;
         }
+        
+        if(event.hasOwnProperty('event_id')){
+          transformed_event.event_id = String(event.event_id);
+        }
+        if(event.hasOwnProperty('event_type')){
+          transformed_event.event_type = String(event.event_type);
+        }
+        if(event.hasOwnProperty('event_name')){
+          transformed_event.event_name = String(event.event_name);
+        }
+        if(event.hasOwnProperty('event_version')){
+          transformed_event.event_version = String(event.event_version);
+        }
+        if(event.hasOwnProperty('event_timestamp')){
+          transformed_event.event_timestamp = Number(event.event_timestamp);
+        }
+        if(event.hasOwnProperty('app_version')){
+          transformed_event.app_version = String(event.app_version);
+        }
+        if(event.hasOwnProperty('event_data')){
+          transformed_event.event_data = event.event_data;
+        }
+        
+        transformed_event.application_name = String(application.application_name);
+        transformed_event.application_id = String(applicationId);
+        
+        return Promise.resolve({
+          recordId: recordId,
+          result: 'Ok',
+          data: new Buffer.from(JSON.stringify(transformed_event) + '\n').toString('base64')
+        });
       } else {
         /**
          * Handle events from unregistered ("NOT_FOUND") applications
          * Sets processing result as "unregistered"
-         * Stores raw event data as "custom_event" and don't validate event
+         * We don't attempt to validate schema of unregistered events, we just coerce the necessary fields into expected format 
          */
         metadata.processing_result = {
           status: 'unregistered'
         };
-        let unregistered_format = {
-          application_id: applicationId,
-          metadata: metadata,
-          custom_event: event
-        };
+        let unregistered_format = {};
+        unregistered_format.metadata = metadata;
+        
+        if(event.hasOwnProperty('event_id')){
+          unregistered_format.event_id = String(event.event_id);
+        }
+        if(event.hasOwnProperty('event_type')){
+          unregistered_format.event_type = String(event.event_type);
+        }
+        if(event.hasOwnProperty('event_name')){
+          unregistered_format.event_name = String(event.event_name);
+        }
+        if(event.hasOwnProperty('event_version')){
+          unregistered_format.event_version = String(event.event_version);
+        }
+        if(event.hasOwnProperty('event_timestamp')){
+          unregistered_format.event_timestamp = Number(event.event_timestamp);
+        }
+        if(event.hasOwnProperty('app_version')){
+          unregistered_format.app_version = String(event.app_version);
+        }
+        if(event.hasOwnProperty('event_data')){
+          unregistered_format.event_data = event.event_data;
+        }
+        
+        // Even though the application_id is not registered, let's add it to the event
+        unregistered_format.application_id = String(applicationId);
+        
         return Promise.resolve({
           recordId: recordId,
           result: 'Ok',
@@ -210,9 +240,9 @@ class Event {
       let valid = validate(data);
       if (!valid) {
         let errors = validate.errors;
-        console.log(`Schema valiidation error: ${JSON.stringify(errors)}`);
         return Promise.resolve({
-          validation_result: 'failed'
+          validation_result: 'schema_mismatch',
+          validation_errors: errors
         });
       } else {
         return Promise.resolve({

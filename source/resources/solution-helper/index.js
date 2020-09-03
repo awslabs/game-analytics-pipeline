@@ -30,6 +30,7 @@ const AthenaHelper = require('./lib/athena-helper.js');
 const GlueHelper = require('./lib/glue-helper.js');
 const KinesisHelper = require('./lib/kinesis-helper.js');
 const MetricsHelper = require('./lib/metrics-helper.js');
+const CloudWatchHelper = require('./lib/cloudwatch-helper.js');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require("crypto");
 
@@ -219,32 +220,6 @@ exports.handler = async (event, context, callback) => {
             },
             {
               "database": event.ResourceProperties.database,
-              "name": "DailyActiveUsersQuery",
-              "description": "Daily active users",
-              "workgroup": event.ResourceProperties.workgroupName,
-              "query": `SELECT
-                date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d')) as event_date,
-                count(distinct user_id) as unique_users
-                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
-                WHERE event_type = 'login'
-                GROUP BY date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d'))
-                ORDER by event_date DESC;`
-            },
-            {
-              "database": event.ResourceProperties.database,
-              "name": "MonthlyActiveUsersQuery",
-              "description": "Monthly active users",
-              "workgroup": event.ResourceProperties.workgroupName,
-              "query": `WITH detail AS (
-                SELECT date_trunc('month', date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d'))) as event_month, *
-                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}")
-                SELECT
-                event_month, COUNT(DISTINCT user_id) as unique_users
-                FROM detail
-                GROUP BY event_month;`
-            },
-            {
-              "database": event.ResourceProperties.database,
               "name": "LatestEventsQuery",
               "description": "Get latest events by event_timestamp",
               "workgroup": event.ResourceProperties.workgroupName,
@@ -289,45 +264,6 @@ exports.handler = async (event, context, callback) => {
             },
             {
               "database": event.ResourceProperties.database,
-              "name": "AverageRevenuePerUser_USD",
-              "description": "Average Revenue Per User (ARPU) US Dollars",
-              "workgroup": event.ResourceProperties.workgroupName,
-              "query": `SELECT
-                date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d')) as event_date,
-                SUM(CAST(json_extract_scalar(event_data, '$.currency_amount') as DOUBLE) * CAST(json_extract_scalar(event_data, '$.item_amount')as DOUBLE))/count(distinct user_id) as ARPU
-                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
-                WHERE json_extract_scalar(event_data, '$.currency_type') = 'USD'
-                AND event_type = 'iap_transaction'
-                GROUP BY date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d'))
-                ORDER BY event_date DESC;`
-            },
-            {
-              "database": event.ResourceProperties.database,
-              "name": "AverageRevenuePerDAU_USD",
-              "description": "Average Revenue Per DAU for US Dollar purchases",
-              "workgroup": event.ResourceProperties.workgroupName,
-              "query": `with arpu as
-                (SELECT 
-                date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d')) as event_date,
-                SUM(CAST(json_extract_scalar(event_data, '$.currency_amount') as DOUBLE) * CAST(json_extract_scalar(event_data, '$.item_amount') as DOUBLE))/count(distinct user_id) as ARPU
-                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
-                WHERE json_extract_scalar(event_data, '$.currency_type') = 'USD' GROUP BY date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d'))
-                AND event_type = 'iap_transaction'
-                ORDER BY event_date DESC
-                ), dau as
-                (SELECT date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d')) as event_date,
-                count(distinct user_id) as unique_users
-                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
-                GROUP BY date(date_parse(CONCAT(year, '-', month, '-', day), '%Y-%m-%d'))
-                ORDER by event_date DESC
-                )
-                select arpu.event_date as event_date, cast(arpu.ARPU AS DOUBLE)/cast(dau.unique_users AS DOUBLE) as ARPDAU
-                from
-                arpu JOIN dau ON arpu.event_date = dau.event_date
-                ORDER BY event_date DESC;`
-            },
-            {
-              "database": event.ResourceProperties.database,
               "name": "NewUsersLastMonth",
               "description": "New Users over the last month",
               "workgroup": event.ResourceProperties.workgroupName,
@@ -340,43 +276,6 @@ exports.handler = async (event, context, callback) => {
                 FROM detail
                 WHERE event_type = 'user_registration'
                 GROUP BY date_trunc('month', event_month);`
-            },
-            {
-              "database": event.ResourceProperties.database,
-              "name": "TotalUsersByCountry",
-              "description": "Total users registered by country",
-              "workgroup": event.ResourceProperties.workgroupName,
-              "query": `SELECT
-                json_extract_scalar(event_data, '$.country_id') as country,
-                count(DISTINCT user_id) as unique_users
-                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
-                WHERE event_type = 'user_registration'
-                GROUP BY json_extract_scalar(event_data, '$.country_id')`
-            },
-            {
-              "database": event.ResourceProperties.database,
-              "name": "TotalUsersByPlatform",
-              "description": "Total users by platform",
-              "workgroup": event.ResourceProperties.workgroupName,
-              "query": `SELECT
-                json_extract_scalar(event_data, '$.platform') as platforms,
-                count(DISTINCT user_id) as unique_users
-                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
-                WHERE event_type = 'login'
-                GROUP BY json_extract_scalar(event_data, '$.platform')`
-            },
-            {
-              "database": event.ResourceProperties.database,
-              "name": "TotalUsersByRank",
-              "description": "Total users by Rank",
-              "workgroup": event.ResourceProperties.workgroupName,
-              "query": `SELECT
-                json_extract_scalar(event_data, '$.user_rank_reached') as user_rank_reached,
-                count(DISTINCT user_id) as unique_users
-                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
-                WHERE event_type = 'user_rank_up'
-                GROUP BY json_extract_scalar(event_data, '$.user_rank_reached')
-                ORDER BY json_extract_scalar(event_data, '$.user_rank_reached') DESC;`
             },
             {
               "database": event.ResourceProperties.database,
@@ -432,7 +331,7 @@ exports.handler = async (event, context, callback) => {
                 FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
                 WHERE event_type='level_completed'GROUP BY json_extract_scalar(event_data, '$.level_id') 
                 )
-                select t1.level, (cast(t1.level_count AS DOUBLE) / (cast(t2.level_count AS DOUBLE) + cast(t1.level_count AS DOUBLE))) * 100 as level_completion_rate from 
+                select t2.level, (cast(t2.level_count AS DOUBLE) / (cast(t2.level_count AS DOUBLE) + cast(t1.level_count AS DOUBLE))) * 100 as level_completion_rate from 
                 t1 JOIN t2 ON t1.level = t2.level
                 ORDER by level;`
             },
@@ -551,12 +450,33 @@ exports.handler = async (event, context, callback) => {
           responseStatus = 'FAILED';
           await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
         }
+      } else if (event.ResourceProperties.customAction === 'createCloudWatchDashboard') {
+        /**
+         * Create dashboard in CloudWatch
+         */
+        let _cloudwatchHelper = new CloudWatchHelper();
+        try {
+          console.log(`Creating CloudWatch dashboard: ${JSON.stringify(event.ResourceProperties)}`);
+          await _cloudwatchHelper.createDashboard(event.ResourceProperties);
+          responseData = {
+            Message: 'Created CloudWatch Dashboard'
+          };
+          responseStatus = 'SUCCESS';
+          await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
+        } catch (error) {
+          console.log(`Failed to create CloudWatch Dashboard`, error);
+          responseData = {
+            Error: 'Failed to create CloudWatch Dashboard'
+          };
+          responseStatus = 'FAILED';
+          await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
+        }
       }
     } //end create
     
     
     /**
-     * Handle solution CloudFormation create events
+     * Handle solution CloudFormation delete events
      */
     if (event.RequestType === 'Delete') {
       
@@ -606,6 +526,29 @@ exports.handler = async (event, context, callback) => {
               Error: 'Sending anonymous launch metric failed.'
             };
           }
+        }
+        await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
+      }
+
+      else if (event.ResourceProperties.customAction === 'createCloudWatchDashboard') {
+        /**
+         * Delete dashboard in CloudWatch
+         */
+        let _cloudwatchHelper = new CloudWatchHelper();
+        try {
+          console.log(`Deleting CloudWatch dashboard: ${event.ResourceProperties.DashboardName}`);
+          await _cloudwatchHelper.deleteDashboard(event.ResourceProperties.DashboardName);
+          responseData = {
+            Message: 'Deleted CloudWatch Dashboard'
+          };
+          responseStatus = 'SUCCESS';
+          await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
+        } catch (error) {
+          console.log(`Failed to delete CloudWatch Dashboard`, error);
+          responseData = {
+            Error: 'Failed to delete CloudWatch Dashboard'
+          };
+          responseStatus = 'FAILED';
           await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
         }
       }
@@ -630,11 +573,11 @@ exports.handler = async (event, context, callback) => {
         await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
       } 
       
-      if (event.ResourceProperties.customAction === 'sendAnonymousMetric') {
+      else if (event.ResourceProperties.customAction === 'sendAnonymousMetric') {
         responseStatus = 'SUCCESS';
         /**
          * Send annonymous metric.
-         * Only when anonymous data is "Yes" to send when the solution is created
+         * Only when anonymous data is "Yes" to send when the solution is updated
          */
         if (event.ResourceProperties.AnonymousData === 'Yes') {
           let _metric = {
@@ -664,6 +607,29 @@ exports.handler = async (event, context, callback) => {
           }
         }
         await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
+      }
+
+      else if (event.ResourceProperties.customAction === 'createCloudWatchDashboard') {
+        /**
+         * Create dashboard in CloudWatch
+         */
+        let _cloudwatchHelper = new CloudWatchHelper();
+        try {
+          console.log(`Creating CloudWatch dashboard: ${event.ResourceProperties}`);
+          await _cloudwatchHelper.createDashboard(event.ResourceProperties);
+          responseData = {
+            Message: 'Created CloudWatch Dashboard'
+          };
+          responseStatus = 'SUCCESS';
+          await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
+        } catch (error) {
+          console.log(`Failed to create CloudWatch Dashboard`, error);
+          responseData = {
+            Error: 'Failed to create CloudWatch Dashboard'
+          };
+          responseStatus = 'FAILED';
+          await sendResponse(event, callback, context.logStreamName, responseStatus, responseData);
+        }
       }
     } 
   } catch (err) {
