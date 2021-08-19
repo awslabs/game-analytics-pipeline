@@ -8,9 +8,7 @@
         "aws-sdk": "*",
         "moment": "*",
         "underscore": "*",
-        "uuid": "*",
-        "request-promise": "*",
-        "request": "*"
+        "uuid": "*"
     },
     "devDependencies": {
         "aws-sdk": "*",
@@ -25,8 +23,6 @@
     "bundledDependencies": [
         "aws-sdk",
         "moment",
-        "uuid",
-        "request-promise",
-        "request"
+        "uuid"
     ]
 }

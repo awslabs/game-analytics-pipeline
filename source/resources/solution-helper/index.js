@@ -20,8 +20,8 @@
 
 console.log('Loading function');
 
+const https = require('https');
 const url = require('url');
-const requestPromise = require('request-promise');
 const moment = require('moment');
 const DynamoDBHelper = require('./lib/dynamodb-helper.js');
 const LambdaHelper = require('./lib/lambda-helper.js');
@@ -311,7 +311,7 @@ exports.handler = async (event, context, callback) => {
               "query": `SELECT
                 json_extract_scalar(event_data, '$.level_id') as level,
                 count(json_extract_scalar(event_data, '$.level_id')) as number_of_completions
-                FROM "<GameEventsDatabase>"."raw"
+                FROM "${event.ResourceProperties.database}"."${event.ResourceProperties.table}"
                 WHERE event_type='level_completed'
                 GROUP BY json_extract_scalar(event_data, '$.level_id')
                 ORDER by json_extract_scalar(event_data, '$.level_id');`
@@ -658,23 +658,27 @@ let sendResponse = async function (event, callback, logStreamName, responseStatu
 
   console.log('RESPONSE BODY:\n', responseBody);
   const parsedUrl = url.parse(event.ResponseURL);
-  const options = {
-    uri: `https://${parsedUrl.hostname}${parsedUrl.path}`,
-    port: 443,
-    method: 'PUT',
-    headers: {
-      'Content-Type': '',
-      'Content-Length': responseBody.length,
-    },
-    body: responseBody,
-  };
-
-  try {
-    await requestPromise(options);
-    console.log('Successfully sent stack response!');
-    callback(null, 'Successfully sent stack response!');
-  } catch (error) {
-    console.log('sendResponse Error:', error);
-    callback(error);
-  }
+  const options = { 
+    hostname: parsedUrl.hostname, 
+    port: 443, 
+    path: parsedUrl.path, 
+    method: 'PUT', 
+    headers: { 
+      'Content-Type': '', 
+      'Content-Length': responseBody.length, 
+    } 
+  }; 
+  const req = https.request(options, (res) => { 
+    console.log('STATUS:', res.statusCode); 
+    console.log('HEADERS:', JSON.stringify(res.headers)); 
+    callback(null, 'Successfully sent stack response!'); 
+  });
+  req.on('error', (err) => { 
+    console.log('sendResponse Error:\n', err); 
+    callback(err); 
+  });
+  req.write(responseBody); 
+  req.end();
+  console.log('Successfully sent stack response!');
+  callback(null, 'Successfully sent stack response!');
 };

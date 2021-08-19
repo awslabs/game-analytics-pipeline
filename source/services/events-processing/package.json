@@ -5,11 +5,10 @@
     "version": "0.0.1",
     "private": true,
     "dependencies": {
-        "ajv": "^6.12.0",
+        "ajv": "^8.6.2",
         "aws-sdk": "*",
-        "moment": "^2.24.0",
-        "node-cache": "^5.1.0",
-        "package.json": "^2.0.1",
+        "moment": "^2.29.1",
+        "node-cache": "^5.1.2",
         "underscore": "*"
     },
     "devDependencies": {

@@ -22,10 +22,9 @@ const AWS = require('aws-sdk');
 const _ = require('underscore');
 const moment = require('moment');
 const event_schema = require('../config/event_schema.json');
-const Ajv = require('ajv');
+const Ajv2020 = require('ajv/dist/2020');
 
-const ajv = new Ajv({schemaId: 'auto'});
-ajv.addMetaSchema(require('ajv/lib/refs/json-schema-draft-04.json'));
+const ajv = new Ajv2020();
 var validate = ajv.compile(event_schema);
 
 const creds = new AWS.EnvironmentCredentials('AWS'); // Lambda provided credentials

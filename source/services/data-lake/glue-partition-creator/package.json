@@ -6,7 +6,7 @@
     "private": true,
     "dependencies": {
         "aws-sdk": "*",
-        "moment": "^2.24.0"
+        "moment": "^2.29.1"
     },
     "devDependencies": {
         "aws-sdk": "*"

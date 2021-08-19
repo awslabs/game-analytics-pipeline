@@ -6,7 +6,7 @@
     "main": "index.js",
     "dependencies": {
         "aws-sdk": "*",
-        "moment": "^2.24.0"
+        "moment": "^2.29.1"
     },
     "devDependencies": {
         "npm-run-all": "*"

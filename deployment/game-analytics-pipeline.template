@@ -70,7 +70,7 @@ Conditions:
 
 Globals:
   Function:
-    Runtime: nodejs12.x
+    Runtime: nodejs14.x
     Tracing: Active
     Environment:
       Variables:
@@ -86,7 +86,7 @@ Resources:
     Properties:
       Handler: index.handler
       Description: 'Function creates a new date-based partition in Glue Database based on UTC Year/Month/Day'
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
       CodeUri: 
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
         Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "glue-partition-creator.zip"]]
@@ -131,13 +131,20 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
-      
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+          - id: W92
+            reason: 'Does not require reserved concurrency and is invoked by kinesis data firehose, which has built in retry, customers can configure reserved concurrency after deployment based on their own requirements.'
+
   EventsProcessingFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
       Description: 'Function to process and transform raw events before they get written to S3'
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
       CodeUri: 
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
         Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "events-processing.zip"]]
@@ -169,12 +176,25 @@ Resources:
               - dynamodb:Scan
             Resource:
               - !GetAtt ApplicationsTable.Arn
-              
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+          - id: W92
+            reason: 'Does not require reserved concurrency and is invoked by kinesis data firehose, which has built in retry, customers can configure reserved concurrency after deployment based on their own requirements.'
+
   EventsProcessingLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${EventsProcessingFunction}'
-      
+      RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
+
   
   AnalyticsProcessingFunction:
     Condition: StreamingAnalytics
@@ -190,10 +210,17 @@ Resources:
       Description: Consumes outputs from Kinesis Data Analytics application for processing
       Handler: index.handler
       MemorySize: 128
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
       Timeout: 60
       Role: !GetAtt AnalyticsProcessingRole.Arn
-  
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+          - id: W92
+            reason: 'Does not require reserved concurrency and is invoked by kinesis data firehose, which has built in retry, customers can configure reserved concurrency after deployment based on their own requirements.'
+
   AnalyticsProcessingRole:
     Condition: StreamingAnalytics
     Type: AWS::IAM::Role
@@ -245,7 +272,12 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AnalyticsProcessingFunction}'
       RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
-             
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
+
   SolutionHelper:
     Type: AWS::Serverless::Function
     Properties:
@@ -254,7 +286,7 @@ Resources:
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
         Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "solution-helper.zip"]]
       Handler: index.handler
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
       Timeout: 300
       MemorySize: 128
       Environment:
@@ -341,13 +373,20 @@ Resources:
               - cloudwatch:DeleteDashboards
             Resource:
               - !Sub 'arn:${AWS::Partition}:cloudwatch::${AWS::AccountId}:dashboard/PipelineOpsDashboard_${AWS::StackName}'
-  
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+          - id: W92
+            reason: 'Does not require reserved concurrency and is invoked by kinesis data firehose, which has built in retry, customers can configure reserved concurrency after deployment based on their own requirements.'
+
   LambdaAuthorizer:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
       Description: 'Lambda Authorizer'
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
       CodeUri: 
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
         Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "lambda-authorizer.zip"]]
@@ -381,19 +420,31 @@ Resources:
               - !GetAtt ApplicationsTable.Arn
               - !GetAtt AuthorizationsTable.Arn
               - !Sub '${AuthorizationsTable.Arn}/index/*'
-  
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+          - id: W92
+            reason: 'Does not require reserved concurrency and is invoked by kinesis data firehose, which has built in retry, customers can configure reserved concurrency after deployment based on their own requirements.'
+
   LambdaAuthorizerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${LambdaAuthorizer}'
       RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
-      
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
+
   ApplicationAdminServiceFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
       Description: 'Application admin service'
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
       CodeUri: 
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
         Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "admin.zip"]]
@@ -431,12 +482,25 @@ Resources:
               - !GetAtt ApplicationsTable.Arn
               - !GetAtt AuthorizationsTable.Arn
               - !Sub '${AuthorizationsTable.Arn}/index/*'
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+          - id: W92
+            reason: 'Does not require reserved concurrency and is invoked by kinesis data firehose, which has built in retry, customers can configure reserved concurrency after deployment based on their own requirements.'
+
   ApplicationAdminServiceServiceFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${ApplicationAdminServiceFunction}'
       RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
-      
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
+
   #############
   # S3 BUCKET #
   #############
@@ -977,6 +1041,11 @@ Resources:
     Properties:
       RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
       LogGroupName: !Sub '/aws/kinesisfirehose/${AWS::StackName}-Ingestion'
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
 
   FirehoseS3DeliveryLogStream:
     Type: AWS::Logs::LogStream

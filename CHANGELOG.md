@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2021-07-30
+### Updated
+- Updated JSON Schema validation version (ajv library) in events processing Lambda function
+- Correcting bugs in Athena queries
+- Update Lambda function node.js dependency libraries
+- Fixed bugs with log groups to have retention enabled
+- Corrected typos in CloudFormation resource names
+- Update Lambda function node.js runtimes
+
 ## [1.1.0] - 2020-08-31
 ### Updated
 - Updated CloudFormation template to move CloudWatch Dashboard body out of the YAML template and into a new custom resource library ```cloudwatch-helper.js```. This code conditionally creates the streaming analytics dashboard widgets only if streaming analytics is enabled as a CloudFormation parameter which fixes a previous bug that wasn't handling this properly. This should also make it easier to customize widget creation.
