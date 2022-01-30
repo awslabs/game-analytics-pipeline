@@ -80,10 +80,13 @@ class Event {
         metadata.api = {};
         if (input.aws_ga_api_requestId) { 
           metadata.api.request_id = input.aws_ga_api_requestId; 
+          delete input.aws_ga_api_requestId;
         }
         if (input.aws_ga_api_requestTimeEpoch) {
           metadata.api.request_time_epoch = input.aws_ga_api_requestTimeEpoch;
+          delete input.aws_ga_api_requestTimeEpoch;
         }
+        delete input.aws_ga_api_validated_flag;
       }
       
       // Retrieve application config from Applications table
