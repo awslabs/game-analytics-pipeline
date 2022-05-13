@@ -76,6 +76,11 @@ aws cloudformation deploy --template-file ./global-s3-assets/game-analytics-pipe
 
 > Include optional parameters as needed, for example to receive SNS notifications from solution alarms, use ```--parameter-overrides SolutionAdminEmailAddress=<EMAIL_ADDRESS>```. A confirmation email is sent to the email address to verify subscription to the SNS Topic.
 
+#### 8. Get started with the Implementation and Developer Guides
+
+* [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/game-analytics-pipeline.pdf): This guide provides an overview of the solution and how it works.
+* [Developer Guide](https://solutions-reference.s3.amazonaws.com/game-analytics-pipeline/latest/game-analytics-pipeline-developer-guide.pdf): This developer guide provides information about customizing and extending the Game Analytics Pipeline solution. It includes detailed information about how the solution components work and how they can be customized.
+
 ## File Structure 
  
 ``` 
