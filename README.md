@@ -78,7 +78,7 @@ aws cloudformation deploy --template-file ./global-s3-assets/game-analytics-pipe
 
 #### 8. Get started with the Implementation and Developer Guides
 
-* [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/game-analytics-pipeline.pdf): This guide provides an overview of the solution and how it works.
+* [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/welcome.html): This guide provides an overview of the solution and how it works. A PDF version of this guide is located [here](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/game-analytics-pipeline.pdf).
 * [Developer Guide](https://solutions-reference.s3.amazonaws.com/game-analytics-pipeline/latest/game-analytics-pipeline-developer-guide.pdf): This developer guide provides information about customizing and extending the Game Analytics Pipeline solution. It includes detailed information about how the solution components work and how they can be customized.
 
 ## File Structure 
