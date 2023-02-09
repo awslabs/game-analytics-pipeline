@@ -5,6 +5,10 @@ The [Game Analytics Pipeline](https://aws.amazon.com/solutions/implementations/g
 
 ## Getting Started
 
+1. Start by reviewing the [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/welcome.html). This guide provides an overview of the solution and how it works. A [PDF version](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/game-analytics-pipeline.pdf) is also available.
+
+2. Next, check out the [Developer Guide](https://solutions-reference.s3.amazonaws.com/game-analytics-pipeline/latest/game-analytics-pipeline-developer-guide.pdf) which provides information about customizing and extending the Game Analytics Pipeline solution. It includes detailed information about how the solution components work and how they can be customized.
+
 The solution source artifacts are provided in this repository to enable customization to the game analytics pipeline solution before deployment. To customize the solution source code and templates, an S3 Bucket is required to host assets used during the build and deployment process.
 
 The build script provided with the solution can be run manually from a command line or can be executed within an automated build/release pipeline. The build script has been tested on Amazon Linux 2 platform. [AWS CodeBuild](https://aws.amazon.com/codebuild/) can be used to automate the build process and provides a variety of custom build environments that you can choose from, including Amazon Linux 2.
@@ -78,8 +82,7 @@ aws cloudformation deploy --template-file ./global-s3-assets/game-analytics-pipe
 
 #### 8. Get started with the Implementation and Developer Guides
 
-* [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/welcome.html): This guide provides an overview of the solution and how it works. A PDF version of this guide is located [here](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/game-analytics-pipeline.pdf).
-* [Developer Guide](https://solutions-reference.s3.amazonaws.com/game-analytics-pipeline/latest/game-analytics-pipeline-developer-guide.pdf): This developer guide provides information about customizing and extending the Game Analytics Pipeline solution. It includes detailed information about how the solution components work and how they can be customized.
+Refer to the [Implementation Guide](https://docs.aws.amazon.com/solutions/latest/game-analytics-pipeline/welcome.html) for deployment instructions and the [Developer Guide](https://solutions-reference.s3.amazonaws.com/game-analytics-pipeline/latest/game-analytics-pipeline-developer-guide.pdf) for details about customizing and extending the solution.
 
 ## File Structure 
  
