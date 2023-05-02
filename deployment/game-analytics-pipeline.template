@@ -517,6 +517,9 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
       LoggingConfiguration:
         DestinationBucketName: !Ref SolutionLogsBucket
         LogFilePrefix: AnalyticsBucket/
@@ -566,7 +569,6 @@ Resources:
           - id: W51
             reason: Policy not required for this bucket
     Properties:
-      AccessControl: LogDeliveryWrite
       BucketEncryption:
         ServerSideEncryptionConfiguration:
         - ServerSideEncryptionByDefault:
@@ -576,6 +578,9 @@ Resources:
         BlockPublicPolicy: True
         IgnorePublicAcls: True
         RestrictPublicBuckets: True
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: ObjectWriter
       LifecycleConfiguration:
         Rules:
           - Id: S3StandardInfrequentAccess
@@ -942,8 +947,9 @@ Resources:
     Properties:
       Description: !Sub 'Etl job for processing raw game event data, for stack ${AWS::StackName}'
       Role: !Ref GameEventsEtlRole
-      GlueVersion: '1.0'
-      MaxCapacity: 10
+      GlueVersion: '4.0'
+      WorkerType: 'Standard'
+      NumberOfWorkers: 2
       Timeout: 30
       ExecutionProperty:   
         MaxConcurrentRuns: 1 
