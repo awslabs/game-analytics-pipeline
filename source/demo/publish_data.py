@@ -52,6 +52,9 @@ def parse_cmd_line():
     parser.add_argument('--input-filename', type=str, dest='input_filename',
                         help='Send events from a file rather than randomly generate them. The format of the file'
                              ' should be one JSON-formatted event per line.')
+    parser.add_argument('--profile', type=str, dest='aws_profile_name', default='default',
+                        help='Specify profile to connect to AWS with'
+                             ' Use `aws configure list-profiles` to see a list of available profiles')
 
     return parser.parse_args()
 
@@ -405,17 +408,19 @@ if __name__ == '__main__':
     kinesis_stream = args.stream_name
     batch_size = args.batch_size or DEFAULT_BATCH_SIZE
     application_id = args.application_id
+    aws_profile_name = args.aws_profile_name
     
     print('===========================================')
     print('CONFIGURATION PARAMETERS:')
     print('- KINESIS_STREAM: ' + kinesis_stream)
     print('- AWS_REGION: ' + aws_region)
     print('- APPLICATION_ID: ' + application_id)
+    print('- AWS profile: ' + aws_profile_name)
     SERVERS = getUUIDs('servers', 3)
     MATCHES = getUUIDs('matches', 50)
     print('===========================================\n')
     
-    session = boto3.Session()
+    session = boto3.Session(profile_name=aws_profile_name)
     client = session.client('kinesis', region_name=aws_region)
     
     send_events_infinite(client, kinesis_stream, batch_size, application_id)
