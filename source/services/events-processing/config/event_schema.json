@@ -49,11 +49,17 @@
 					"pattern": "^[A-Za-z0-9-_.]+$",
 					"description": "Version identifier for the application that generated the event"
 				},
+				"game_time": {
+					"type": "object"
+				},
+				"remote_config": {
+					"type": "object"
+				},
 				"event_data": {
 					"type": "object"
 				}
 			},
-			"required": ["event_id", "event_type", "event_timestamp", "event_name"]
+			"required": ["event_id", "event_type", "event_timestamp", "event_name", "app_version", "game_time", "remote_config", "event_data"]
 		}
 	}
 }

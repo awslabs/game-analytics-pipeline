@@ -11,4 +11,4 @@
 **/.vscode
 **/__pycache__
 **/.lambda_package
-**/.package-lock.json
+**/package-lock.json

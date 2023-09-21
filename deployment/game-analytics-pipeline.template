@@ -674,21 +674,25 @@ Resources:
           Columns:
             - Name: event_id
               Type: string
-            - Name: event_type
-              Type: string
             - Name: event_name
               Type: string
-            - Name: event_version
+            - Name: event_type
               Type: string
             - Name: event_timestamp
               Type: bigint
             - Name: app_version
               Type: string
-            - Name: application_id
-              Type: string
             - Name: application_name
               Type: string
             - Name: event_data 
+              Type: string
+            - Name: remote_config
+              Type: string
+            - Name: game_time
+              Type: long
+            - Name: event_version
+              Type: string
+            - Name: application_id
               Type: string
             - Name: metadata
               Type: string
@@ -1807,6 +1811,10 @@ Resources:
                 event_timestamp:
                   type: number
                   description: The time in seconds since the Unix epoch at which this event occurred (set by producer of event).
+                game_time:
+                  type: int
+                remote_config:
+                  type: object
                 event_data:
                   type: object
           securitySchemes:
