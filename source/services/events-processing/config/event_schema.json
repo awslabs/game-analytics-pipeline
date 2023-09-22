@@ -50,10 +50,12 @@
 					"description": "Version identifier for the application that generated the event"
 				},
 				"game_time": {
-					"type": "object"
+					"type": "number",
+					"description": "The gaming time of a session in seconds."
 				},
 				"remote_config": {
-					"type": "object"
+					"type": "object",
+					"description": "JSON object detailing player's A/B test groups"
 				},
 				"event_data": {
 					"type": "object"

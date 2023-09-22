@@ -695,7 +695,7 @@ Resources:
             - Name: remote_config
               Type: string
             - Name: game_time
-              Type: long
+              Type: bigint
             - Name: event_version
               Type: string
             - Name: application_id
@@ -1793,6 +1793,11 @@ Resources:
                   - event_type
                   - event_name
                   - event_timestamp
+                  - event_name
+                  - app_version
+                  - game_time
+                  - remote_config
+                  - event_data
               properties:
                 event_id:
                   type: string
@@ -1818,9 +1823,11 @@ Resources:
                   type: number
                   description: The time in seconds since the Unix epoch at which this event occurred (set by producer of event).
                 game_time:
-                  type: int
+                  type: number
+                  description: The gaming time of a session in seconds.
                 remote_config:
                   type: object
+                  description: JSON object detailing player's A/B test groups
                 event_data:
                   type: object
           securitySchemes:
