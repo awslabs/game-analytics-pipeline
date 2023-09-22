@@ -127,6 +127,12 @@ class Event {
         if(event.hasOwnProperty('app_version')){
           transformed_event.app_version = String(event.app_version);
         }
+        if(event.hasOwnProperty('game_time')){
+          transformed_event.game_time = Number(event.game_time);
+        }
+        if(event.hasOwnProperty('remote_config')){
+          transformed_event.remote_config = event.remote_config;
+        }
         if(event.hasOwnProperty('event_data')){
           transformed_event.event_data = event.event_data;
         }
@@ -169,8 +175,14 @@ class Event {
         if(event.hasOwnProperty('app_version')){
           unregistered_format.app_version = String(event.app_version);
         }
+        if(event.hasOwnProperty('game_time')){
+          unregistered_format.game_time = Number(event.game_time);
+        }
         if(event.hasOwnProperty('event_data')){
           unregistered_format.event_data = event.event_data;
+        }
+        if(event.hasOwnProperty('remote_config')){
+          unregistered_format.remote_config = event.remote_config;
         }
         
         // Even though the application_id is not registered, let's add it to the event
