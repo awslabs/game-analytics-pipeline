@@ -1,10 +1,22 @@
-AWS_REGION="eu-west-3"
-STACK_NAME="analytics-dev"
-DIST_OUTPUT_BUCKET="$STACK_NAME-output-bucket"
+if [ -z $BRANCH_NAME ]; then
+    # Jenkins runs script on git branch in a detached HEAD state.
+    # Jenkins has BRANCH_NAME environment variable
+    export BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
+fi
+
+if [ $BRANCH_NAME = "master" ]; then
+    export AWS_REGION="us-east-1"
+    STACK_NAME="analytics-prod"
+else
+    export AWS_REGION="eu-west-3"
+    STACK_NAME="analytics-dev"
+fi
+
+DIST_OUTPUT_BUCKET="analytics-output-bucket"
 VERSION="v1"
 
 # Run following commands only the first time to create bucket.
-# aws s3 mb s3://$DIST_OUTPUT_BUCKET-$AWS_REGION --region $AWS_REGION
+# aws s3 mb s3://$DIST_OUTPUT_BUCKET --region $AWS_REGION
 
 cd ./deployment
 chmod +x ./build-s3-dist.sh

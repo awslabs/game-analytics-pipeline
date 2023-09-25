@@ -53,6 +53,14 @@
 					"type": "number",
 					"description": "The gaming time of a session in seconds."
 				},
+				"user": {
+					"type": "object",
+					"description": "JSON object detailing user data"
+				},
+				"device": {
+					"type": "object",
+					"description": "JSON object detailing device data"
+				},
 				"remote_config": {
 					"type": "object",
 					"description": "JSON object detailing player's A/B test groups"
@@ -61,7 +69,7 @@
 					"type": "object"
 				}
 			},
-			"required": ["event_id", "event_type", "event_timestamp", "event_name", "app_version", "game_time", "remote_config", "event_data"]
+			"required": ["event_id", "event_type", "event_timestamp", "event_name", "app_version", "game_time", "user", "device", "remote_config", "event_data"]
 		}
 	}
 }

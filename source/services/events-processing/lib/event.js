@@ -108,7 +108,15 @@ class Event {
           };
           transformed_event.metadata = metadata;
         }
-        
+
+        if (await _self.eventAlreadyProcessed(event.event_id, event.event_timestamp)) {
+          return Promise.resolve({
+            recordId: recordId,
+            result: 'Dropped',
+            data: new Buffer.from(JSON.stringify(input) + '\n').toString('base64')
+          });
+        }
+
         if(event.hasOwnProperty('event_id')){
           transformed_event.event_id = String(event.event_id);
         }
@@ -129,6 +137,12 @@ class Event {
         }
         if(event.hasOwnProperty('game_time')){
           transformed_event.game_time = Number(event.game_time);
+        }
+        if(event.hasOwnProperty('user')){
+          transformed_event.user = event.user;
+        }
+        if(event.hasOwnProperty('device')){
+          transformed_event.device = event.device;
         }
         if(event.hasOwnProperty('remote_config')){
           transformed_event.remote_config = event.remote_config;
@@ -181,6 +195,12 @@ class Event {
         if(event.hasOwnProperty('event_data')){
           unregistered_format.event_data = event.event_data;
         }
+        if(event.hasOwnProperty('user')){
+          unregistered_format.user = event.user;
+        }
+        if(event.hasOwnProperty('device')){
+          unregistered_format.device = event.device;
+        }
         if(event.hasOwnProperty('remote_config')){
           unregistered_format.remote_config = event.remote_config;
         }
@@ -204,6 +224,46 @@ class Event {
     }
   }
   
+
+  /**
+   * Retrieve event_id from DynamoDB
+   * If not in Dynamo Table, add it
+   * Returns bool
+   */
+  async eventAlreadyProcessed(eventID, eventTimestamp) {
+    const params = {
+      TableName: process.env.IDEMPOTENCY_TABLE,
+      Key: {
+        event_id: eventID
+      }
+    };
+    
+    // get from DynamoDB
+    const docClient = new AWS.DynamoDB.DocumentClient(this.dynamoConfig);
+    try {
+      let data = await docClient.get(params).promise();
+      if (!_.isEmpty(data)) {
+        // This event has already been processed
+        return Promise.resolve(true);
+      } else {
+        // This event has never been processed
+        // There is 86400 seconds in one day
+        const putParams = {
+          TableName: process.env.IDEMPOTENCY_TABLE,
+          Item: {
+            event_id: eventID,
+            expires_timestamp: eventTimestamp + 86400 * 7
+          }
+        };
+        await docClient.put(putParams).promise();
+        return Promise.resolve(false);
+      }
+    } catch (err) {
+      console.log(JSON.stringify(err));
+      return Promise.reject(err);
+    }
+  }
+
   /**
    * Retrieve application from DynamoDB
    * Fetches from and updates the local registered applications cache with results

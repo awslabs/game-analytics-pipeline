@@ -153,6 +153,7 @@ Resources:
       Environment:
         Variables:
           APPLICATIONS_TABLE: !Ref ApplicationsTable
+          IDEMPOTENCY_TABLE: !Ref IdempotencyTable
           CACHE_TIMEOUT_SECONDS: 60
       Policies:
         Version: 2012-10-17
@@ -171,11 +172,13 @@ Resources:
             Action:
               - dynamodb:BatchGetItem
               - dynamodb:GetItem
+              - dynamodb:PutItem
               - dynamodb:GetRecords
               - dynamodb:Query
               - dynamodb:Scan
             Resource:
               - !GetAtt ApplicationsTable.Arn
+              - !GetAtt IdempotencyTable.Arn
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -683,6 +686,10 @@ Resources:
             - Name: app_version
               Type: string
             - Name: application_name
+              Type: string
+            - Name: user
+              Type: string
+            - Name: device
               Type: string
             - Name: event_data 
               Type: string
@@ -1195,6 +1202,25 @@ Resources:
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
+
+  IdempotencyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      TimeToLiveSpecification:
+        AttributeName: expires_timestamp
+        Enabled: true
   
   
   ####################
@@ -1790,6 +1816,8 @@ Resources:
                   - event_name
                   - app_version
                   - game_time
+                  - user
+                  - device
                   - remote_config
                   - event_data
               properties:
@@ -1819,6 +1847,12 @@ Resources:
                 game_time:
                   type: number
                   description: The gaming time of a session in seconds.
+                user:
+                  type: object
+                  description: JSON object detailing user data
+                device:
+                  type: object
+                  description: JSON object detailing device data
                 remote_config:
                   type: object
                   description: JSON object detailing player's A/B test groups
