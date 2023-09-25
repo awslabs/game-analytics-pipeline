@@ -5,11 +5,14 @@ if [ -z $BRANCH_NAME ]; then
 fi
 
 if [ $BRANCH_NAME = "master" ]; then
-    export AWS_REGION="us-east-1"
+    AWS_REGION="us-east-1"
     STACK_NAME="analytics-prod"
-else
-    export AWS_REGION="eu-west-3"
+elif [ $BRANCH_NAME = "dev" ]; then
+    AWS_REGION="eu-west-3"
     STACK_NAME="analytics-dev"
+else
+    AWS_REGION="eu-west-3"
+    STACK_NAME="analytics-branch"
 fi
 
 DIST_OUTPUT_BUCKET="analytics-output-bucket"

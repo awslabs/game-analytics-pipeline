@@ -12,9 +12,13 @@
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
       "description": "The application identifier (UUID) this event is associated with"
-    }
+    },
+		"ip_adress": {
+			"type": "string",
+			"description": "IP adress of user"
+		}
 	},
-	"required": ["event", "application_id"],
+	"required": ["event", "application_id", "ip_adress"],
 	"definitions": {
 		"event": {
 			"type": "object",

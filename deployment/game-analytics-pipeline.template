@@ -687,16 +687,16 @@ Resources:
               Type: string
             - Name: application_name
               Type: string
-            - Name: user
-              Type: string
-            - Name: device
-              Type: string
             - Name: event_data 
               Type: string
             - Name: remote_config
               Type: string
             - Name: game_time
               Type: bigint
+            - Name: user
+              Type: string
+            - Name: device
+              Type: string
             - Name: event_version
               Type: string
             - Name: application_id
@@ -1721,7 +1721,8 @@ Resources:
                             ""aws_ga_api_validated_flag"": true,
                             ""aws_ga_api_requestId"": ""$context.requestId"",
                             ""aws_ga_api_requestTimeEpoch"": $context.requestTimeEpoch,
-                            ""application_id"": ""$util.escapeJavaScript($input.params().path.get('applicationId'))""
+                            ""application_id"": ""$util.escapeJavaScript($input.params().path.get('applicationId'))"",
+                            ""ip_adress"": ""$context.identity.sourceIp""
                           }" )
                           {
                             "Data": "$util.base64Encode($output)",

@@ -68,13 +68,14 @@ class Event {
       }
       const applicationId = input.application_id;
       const event = input.event;
+      const ip_adress = input.ip_adress;
       
       // Add a processing timestamp and the Lambda Request Id to the event metadata
       let metadata = {
         ingestion_id: context.awsRequestId,
         processing_timestamp: moment().unix()
       };
-      
+
       // If event came from Solution API, it should have extra metadata
       if (input.aws_ga_api_validated_flag) {
         metadata.api = {};
@@ -88,7 +89,7 @@ class Event {
         }
         delete input.aws_ga_api_validated_flag;
       }
-      
+
       // Retrieve application config from Applications table
       const application = await _self.getApplication(applicationId);
       if (application !== null) {
@@ -140,6 +141,7 @@ class Event {
         }
         if(event.hasOwnProperty('user')){
           transformed_event.user = event.user;
+          transformed_event.user.ip_adress = ip_adress
         }
         if(event.hasOwnProperty('device')){
           transformed_event.device = event.device;
@@ -197,6 +199,7 @@ class Event {
         }
         if(event.hasOwnProperty('user')){
           unregistered_format.user = event.user;
+          unregistered_format.user.ip_adress = ip_adress
         }
         if(event.hasOwnProperty('device')){
           unregistered_format.device = event.device;
