@@ -683,8 +683,6 @@ Resources:
               Type: string
             - Name: event_timestamp
               Type: bigint
-            - Name: app_version
-              Type: string
             - Name: application_name
               Type: string
             - Name: event_data 
@@ -693,13 +691,13 @@ Resources:
               Type: string
             - Name: game_time
               Type: bigint
+            - Name: app_info
+              Type: string
             - Name: user
               Type: string
             - Name: device
               Type: string
             - Name: event_version
-              Type: string
-            - Name: application_id
               Type: string
             - Name: metadata
               Type: string
@@ -1722,7 +1720,8 @@ Resources:
                             ""aws_ga_api_requestId"": ""$context.requestId"",
                             ""aws_ga_api_requestTimeEpoch"": $context.requestTimeEpoch,
                             ""application_id"": ""$util.escapeJavaScript($input.params().path.get('applicationId'))"",
-                            ""ip_adress"": ""$context.identity.sourceIp""
+                            ""ip_adress"": ""$context.identity.sourceIp"",
+                            ""country"": ""$input.params('CloudFront-Viewer-Country')""
                           }" )
                           {
                             "Data": "$util.base64Encode($output)",
@@ -1815,8 +1814,9 @@ Resources:
                   - event_name
                   - event_timestamp
                   - event_name
-                  - app_version
+                  - event_version
                   - game_time
+                  - app_info
                   - user
                   - device
                   - remote_config
@@ -1838,16 +1838,15 @@ Resources:
                   type: string
                   pattern: "^[A-Za-z0-9-_.]+$"
                   description: An API version for this event format.
-                app_version:
-                  type: string
-                  pattern: "^[A-Za-z0-9-_.]+$"
-                  description: Version identifier for the application that generated the event
                 event_timestamp:
                   type: number
                   description: The time in seconds since the Unix epoch at which this event occurred (set by producer of event).
                 game_time:
                   type: number
                   description: The gaming time of a session in seconds.
+                app_info:
+                  type: object
+                  description: JSON object detailing app data
                 user:
                   type: object
                   description: JSON object detailing user data

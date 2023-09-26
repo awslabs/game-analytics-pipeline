@@ -13,6 +13,10 @@
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
       "description": "The application identifier (UUID) this event is associated with"
     },
+		"country": {
+			"type": "string",
+			"description": "Country code of user"
+		},
 		"ip_adress": {
 			"type": "string",
 			"description": "IP adress of user"
@@ -48,14 +52,13 @@
 					"pattern": "^[A-Za-z0-9-_.]+$",
 					"description": "An API version for this event format."
 				},
-				"app_version": {
-					"type": "string",
-					"pattern": "^[A-Za-z0-9-_.]+$",
-					"description": "Version identifier for the application that generated the event"
-				},
 				"game_time": {
 					"type": "number",
 					"description": "The gaming time of a session in seconds."
+				},
+				"app_info": {
+					"type": "object",
+					"description": "JSON object detailing app's data"
 				},
 				"user": {
 					"type": "object",
@@ -70,10 +73,11 @@
 					"description": "JSON object detailing player's A/B test groups"
 				},
 				"event_data": {
-					"type": "object"
+					"type": "object",
+					"description": "JSON object detailing event's data"
 				}
 			},
-			"required": ["event_id", "event_type", "event_timestamp", "event_name", "app_version", "game_time", "user", "device", "remote_config", "event_data"]
+			"required": ["event_id", "event_type", "event_timestamp", "event_name", "event_version", "game_time", "app_info", "user", "device", "remote_config", "event_data"]
 		}
 	}
 }
