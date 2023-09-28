@@ -23,7 +23,7 @@ Parameters:
     AllowedValues:
       - 'Yes'
       - 'No'
-    Default: 'Yes'
+    Default: 'No'
   SolutionAdminEmailAddress:
     Type: String
     Description: |
@@ -631,6 +631,7 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
+        Name: !Sub '${AWS::StackName}'
         Description: !Sub 'Database for game analytics events for stack ${AWS::StackName}'
         LocationUri: !Sub 's3://${AnalyticsBucket}'
   
@@ -1147,6 +1148,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-applications'
       AttributeDefinitions:
         - AttributeName: application_id
           AttributeType: S
@@ -1163,6 +1166,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-authorizations'
       AttributeDefinitions:
         - AttributeName: api_key_id
           AttributeType: S
@@ -1205,6 +1210,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-idempotency'
       AttributeDefinitions:
         - AttributeName: event_id
           AttributeType: S
@@ -1219,6 +1226,155 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: expires_timestamp
         Enabled: true
+
+  RemoteConfigsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-remote-configs'
+      AttributeDefinitions:
+        - AttributeName: ID
+          AttributeType: S
+        - AttributeName: active
+          AttributeType: N
+        - AttributeName: bundle_ID
+          AttributeType: S
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ID
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: active-index
+          KeySchema:
+            - AttributeName: active
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: bundle_ID-ID-index
+          KeySchema:
+            - AttributeName: bundle_ID
+              KeyType: HASH
+            - AttributeName: ID
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
+        - IndexName: bundle_ID-name-index
+          KeySchema:
+            - AttributeName: bundle_ID
+              KeyType: HASH
+            - AttributeName: name
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
+        - IndexName: bundle_ID-index
+          KeySchema:
+            - AttributeName: bundle_ID
+              KeyType: HASH
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - ID
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
+  ABTestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-abtests'
+      AttributeDefinitions:
+        - AttributeName: ID
+          AttributeType: S
+        - AttributeName: active
+          AttributeType: N
+        - AttributeName: name
+          AttributeType: S
+        - AttributeName: remote_config_ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ID
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: active-index
+          KeySchema:
+            - AttributeName: active
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: remote_config_ID-index
+          KeySchema:
+            - AttributeName: remote_config_ID
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: remote_config_ID-name-index
+          KeySchema:
+            - AttributeName: remote_config_ID
+              KeyType: HASH
+            - AttributeName: name
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
+  ABTestsHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-abtests-history'
+      AttributeDefinitions:
+        - AttributeName: abtest_ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: abtest_ID  
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
+  UsersABTestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-users-abtests'
+      AttributeDefinitions:
+        - AttributeName: uid
+          AttributeType: S
+        - AttributeName: abtest_ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: uid
+          KeyType: HASH
+        - AttributeName: abtest_ID
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: abtest_ID-index
+          KeySchema:
+            - AttributeName: abtest_ID
+              KeyType: HASH
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - uid
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
   
   
   ####################

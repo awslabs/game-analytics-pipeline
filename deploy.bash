@@ -4,25 +4,29 @@ if [ -z $BRANCH_NAME ]; then
     export BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
 fi
 
+PARAMETER_OVERRIDES=""
 if [ $BRANCH_NAME = "master" ]; then
     AWS_REGION="us-east-1"
-    STACK_NAME="analytics-prod"
+    ENVIRONMENT="prod"
+    PARAMETER_OVERRIDES="--parameter-overrides KinesisStreamShards=5 SolutionMode=Prod"
 elif [ $BRANCH_NAME = "dev" ]; then
     AWS_REGION="eu-west-3"
-    STACK_NAME="analytics-dev"
+    ENVIRONMENT="dev"
 else
     AWS_REGION="eu-west-3"
-    STACK_NAME="analytics-branch"
+    ENVIRONMENT="branch"
 fi
 
 DIST_OUTPUT_BUCKET="analytics-output-bucket"
-VERSION="v2"
+STACK_NAME="analytics-$ENVIRONMENT"
+VERSION="v3"
 
 # Run following commands only the first time to create bucket.
 # aws s3 mb s3://$DIST_OUTPUT_BUCKET --region $AWS_REGION
 
 cd ./deployment
 chmod +x ./build-s3-dist.sh
+chmod +x ./deploy-remote-config.sh
 
 # Build project
 ./build-s3-dist.sh $DIST_OUTPUT_BUCKET $STACK_NAME $VERSION
@@ -33,5 +37,13 @@ aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/$STACK_NAME/
 # Store Global Assets to S3
 aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/$STACK_NAME/$VERSION --recursive --acl bucket-owner-full-control
 
+# Deploy Remote Config API Gateway
+./deploy-remote-config.sh $ENVIRONMENT $AWS_REGION
+
 # Deploy CloudFormation by creating/updating Stack
-aws cloudformation deploy --template-file ./global-s3-assets/game-analytics-pipeline.template --stack-name $STACK_NAME --capabilities CAPABILITY_IAM  --s3-bucket $DIST_OUTPUT_BUCKET-$AWS_REGION
+aws cloudformation deploy \
+    --template-file ./global-s3-assets/game-analytics-pipeline.template \
+    --stack-name $STACK_NAME \
+    --capabilities CAPABILITY_IAM \
+    --s3-bucket $DIST_OUTPUT_BUCKET-$AWS_REGION \
+    $PARAMETER_OVERRIDES
