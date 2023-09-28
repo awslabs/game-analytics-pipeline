@@ -19,7 +19,7 @@ fi
 
 DIST_OUTPUT_BUCKET="analytics-output-bucket"
 STACK_NAME="analytics-$ENVIRONMENT"
-VERSION="v3"
+VERSION="v1"
 
 # Run following commands only the first time to create bucket.
 # aws s3 mb s3://$DIST_OUTPUT_BUCKET --region $AWS_REGION
@@ -32,10 +32,10 @@ chmod +x ./deploy-remote-config.sh
 ./build-s3-dist.sh $DIST_OUTPUT_BUCKET $STACK_NAME $VERSION
 
 # Store Regional Assets to S3
-aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/$STACK_NAME/$VERSION --recursive --acl bucket-owner-full-control
+aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
 # Store Global Assets to S3
-aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/$STACK_NAME/$VERSION --recursive --acl bucket-owner-full-control
+aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
 # Deploy Remote Config API Gateway
 ./deploy-remote-config.sh $ENVIRONMENT $AWS_REGION
@@ -46,4 +46,5 @@ aws cloudformation deploy \
     --stack-name $STACK_NAME \
     --capabilities CAPABILITY_IAM \
     --s3-bucket $DIST_OUTPUT_BUCKET-$AWS_REGION \
+    --s3-prefix templates \
     $PARAMETER_OVERRIDES
