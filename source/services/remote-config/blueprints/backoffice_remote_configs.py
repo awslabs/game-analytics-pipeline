@@ -31,12 +31,12 @@ def create_remote_config():
     """
     database: DynamoDBServiceResource = current_app.config["database"]
     payload = request.get_json(force=True)
-    bundle_ID = payload.pop("bundle_ID", None)
+    application_ID = payload.pop("application_ID", None)
 
     remote_config_ID = str(uuid4())
     try:
         remote_config = RemoteConfig.from_dict(database, remote_config_ID, payload)
-        remote_config.create(bundle_ID)
+        remote_config.create(application_ID)
     except AssertionError as e:
         return jsonify(error=str(e)), 400
 

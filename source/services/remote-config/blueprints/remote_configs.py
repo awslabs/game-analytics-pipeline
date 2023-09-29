@@ -1,7 +1,7 @@
 """
 This module contains abtests endpoints.
 """
-from flask import Blueprint, current_app, jsonify
+from flask import Blueprint, current_app, jsonify, request
 
 from models.RemoteConfig import RemoteConfig
 
@@ -14,5 +14,9 @@ def get_uid_slot(uid: str):
     """
     This endpoint returns all remote configs.
     """
-    remote_configs = RemoteConfig.get_all_from_uid(current_app.config["database"], uid)
-    return jsonify(remote_configs=remote_configs)
+    if application_ID := request.args.get("application_ID"):
+        remote_configs = RemoteConfig.get_all_from_uid(
+            current_app.config["database"], uid, application_ID
+        )
+        return jsonify(remote_configs)
+    return jsonify(error="Invalid payload : application_ID"), 400

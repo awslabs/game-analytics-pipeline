@@ -47,7 +47,7 @@ paths:
                         name:
                           type: string
                           example: ButtonColor
-                        origin_value:
+                        value_origin:
                           type: string
                           enum:
                           - reference_value
@@ -79,7 +79,7 @@ paths:
                       properties:
                         activated:
                           type: boolean
-                        bundle_ID:
+                        application_ID:
                           type: string
                           example: com.geode.dazzly
                         description:
@@ -96,19 +96,19 @@ paths:
       - Backoffice Remote Config
       requestBody:
         description: |-
-          - You can't create 2 remote configs with the same `name` & `bundle_ID`
+          - You can't create 2 remote configs with the same `name` & `application_ID`
         required: true
         content:
           application/json:
             schema:
               required:
-              - bundle_ID
+              - application_ID
               - description
               - name
               - reference_value
               type: object
               properties:
-                bundle_ID:
+                application_ID:
                   type: string
                   example: com.geode.dazzly
                 description:
@@ -154,7 +154,7 @@ paths:
           example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
       requestBody:
         description: |-
-          - you can't use a `name` that has already been used by another remote config on the same bundle_ID
+          - you can't use a `name` that has already been used by another remote config on the same application_ID
           - You can't update `name` and `reference_value` if this remote config is activated.
         required: true
         content:
@@ -361,7 +361,7 @@ paths:
         This endpoint activates an ABTest. You can active an ABTest only if :
         - his remote config is activate
         - there isn't another ABTest already activated on this remote config
-        - there are not already 4 ABTests activated on the bundle_ID link to the remote config.
+        - there are not already 4 ABTests activated on the application_ID link to the remote config.
       tags:
       - Backoffice Remote Config
       parameters:

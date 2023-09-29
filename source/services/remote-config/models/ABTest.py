@@ -240,7 +240,7 @@ class ABTest:
 
     def save_history(
         self,
-        bundle_ID: str,
+        application_ID: str,
         remote_config_name: str,
         reference_value: str,
         promoted_value: str,
@@ -258,7 +258,7 @@ class ABTest:
             Item={
                 "abtest_ID": self.__abtest_ID,
                 "abtest_name": self.name,
-                "bundle_ID": bundle_ID,
+                "application_ID": application_ID,
                 "end_timestamp": now,
                 "pauses": pauses,
                 "promoted_value": promoted_value,

@@ -64,23 +64,25 @@ class RemoteConfig:
 
     @staticmethod
     def get_all_from_uid(
-        database: DynamoDBServiceResource, uid: str
-    ) -> list[dict[str, Any]]:
+        database: DynamoDBServiceResource, uid: str, application_ID: str
+    ) -> dict[str, dict[str, str]]:
         """
         This method returns a list of all remote configs from an uid.
         If a remote config has an active ABTest, we retrieve his group, or set the user to a group if it has none.
         """
         response = database.Table(constants.TABLE_REMOTE_CONFIGS).query(
-            IndexName="active-index", KeyConditionExpression=Key("active").eq(1)
+            IndexName="application_ID-active-index",
+            KeyConditionExpression=Key("application_ID").eq(application_ID) & Key("active").eq(1)
         )
 
-        remote_configs = []
+        remote_configs = {}
         for remote_config_data in response["Items"]:
             remote_config = RemoteConfig(
                 database, remote_config_data.pop("ID"), remote_config_data
             )
             abtest = ABTest.active_from_remote_config_id(database, remote_config.id)
-            remote_configs.append(remote_config.to_user_remote_config(uid, abtest))
+            user_remote_config = remote_config.to_user_remote_config(uid, abtest)
+            remote_configs[user_remote_config.pop("name")] = user_remote_config
 
         return remote_configs
 
@@ -92,11 +94,11 @@ class RemoteConfig:
         return self.__data["active"] == 1
 
     @property
-    def bundle_ID(self) -> str:
+    def application_ID(self) -> str:
         """
-        This method returns bundle_ID.
+        This method returns application_ID.
         """
-        return self.__data["bundle_ID"]
+        return self.__data["application_ID"]
 
     @property
     def id(self) -> str:
@@ -136,21 +138,21 @@ class RemoteConfig:
         if abtest := ABTest.from_id(self.__database, abtest_ID):
             abtest.activate(start_timestamp)
 
-    def create(self, bundle_ID: str):
+    def create(self, application_ID: str):
         """
         This method creates RemoteConfig in database.
         """
-        assert isinstance(bundle_ID, str), "`bundle_ID` should be str"
+        assert isinstance(application_ID, str), "`application_ID` should be str"
 
-        # Check if there is already a remote config with the same name and same bundle_ID
-        if self.__name_exists(self.name, bundle_ID):
+        # Check if there is already a remote config with the same name and same application_ID
+        if self.__name_exists(self.name, application_ID):
             raise AssertionError(
-                f"There is already a remote config named {self.name} on app {bundle_ID}"
+                f"There is already a remote config named {self.name} on app {application_ID}"
             )
 
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS).put_item(
             Item=self.__data
-            | {"ID": self.__remote_config_ID, "active": 0, "bundle_ID": bundle_ID}
+            | {"ID": self.__remote_config_ID, "active": 0, "application_ID": application_ID}
         )
 
     def create_abtest(self, abtest_ID: str, abtest_data: dict[str, Any]):
@@ -201,11 +203,11 @@ class RemoteConfig:
         if len(remote_configs) < constants.MAX_ACTIVATED_ABTESTS:
             return False
 
-        # Retrieve all RemoteConfig that have same bundle_ID and remote_config_ID
+        # Retrieve all RemoteConfig that have same application_ID and remote_config_ID
         # equal to at least one of the active abstests
         response = self.__database.Table(constants.TABLE_REMOTE_CONFIGS).query(
-            IndexName="bundle_ID-index",
-            KeyConditionExpression=Key("bundle_ID").eq(self.bundle_ID),
+            IndexName="application_ID-index",
+            KeyConditionExpression=Key("application_ID").eq(self.application_ID),
             FilterExpression=Attr("ID").is_in(list(remote_configs)),
         )
 
@@ -250,7 +252,7 @@ class RemoteConfig:
         )
 
         abtest.save_history(
-            self.bundle_ID, self.name, self.reference_value, promoted_value
+            self.application_ID, self.name, self.reference_value, promoted_value
         )
         abtest.purge()
         abtest.delete()
@@ -260,7 +262,7 @@ class RemoteConfig:
         This method returns a dict that represents the remote config with user specifications.
         It assigns user to a group of the ABTest if he has not been assigned.
         """
-        origin_value = "reference_value"
+        value_origin = "reference_value"
         value = self.reference_value
 
         if abtest:
@@ -273,12 +275,12 @@ class RemoteConfig:
                     self.__data["reference_value"],
                     abtest.variants,
                 )
-            origin_value = "abtest" if user_abtest.is_in_test else "reference_value"
+            value_origin = "abtest" if user_abtest.is_in_test else "reference_value"
             value = user_abtest.value
 
         return {
             "name": self.name,
-            "origin_value": origin_value,
+            "value_origin": value_origin,
             "value": value,
         }
 
@@ -300,10 +302,10 @@ class RemoteConfig:
             ), "You can't update `reference_value` field because remote config is active"
 
         if self.__name_exists(
-            new_name, self.bundle_ID, to_exclude=self.__remote_config_ID
+            new_name, self.application_ID, to_exclude=self.__remote_config_ID
         ):
             raise AssertionError(
-                f"There is already a remote config named {new_name} on app {self.bundle_ID}"
+                f"There is already a remote config named {new_name} on app {self.application_ID}"
             )
 
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS).update_item(
@@ -338,10 +340,10 @@ class RemoteConfig:
         if copy_data:
             raise AssertionError(f"Unexpected fields : {list(copy_data)}")
 
-    def __name_exists(self, name: str, bundle_ID: str, to_exclude: str = "") -> bool:
+    def __name_exists(self, name: str, application_ID: str, to_exclude: str = "") -> bool:
         response = self.__database.Table(constants.TABLE_REMOTE_CONFIGS).query(
-            IndexName="bundle_ID-name-index",
-            KeyConditionExpression=Key("bundle_ID").eq(bundle_ID)
+            IndexName="application_ID-name-index",
+            KeyConditionExpression=Key("application_ID").eq(application_ID)
             & Key("name").eq(name),
         )
         return any(item["ID"] != to_exclude for item in response.get("Items", []))

@@ -1240,7 +1240,7 @@ Resources:
           AttributeType: S
         - AttributeName: active
           AttributeType: N
-        - AttributeName: bundle_ID
+        - AttributeName: application_ID
           AttributeType: S
         - AttributeName: name
           AttributeType: S
@@ -1248,31 +1248,39 @@ Resources:
         - AttributeName: ID
           KeyType: HASH
       GlobalSecondaryIndexes:
+        - IndexName: application_ID-active-index
+          KeySchema:
+            - AttributeName: application_ID
+              KeyType: HASH
+            - AttributeName: active
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
         - IndexName: active-index
           KeySchema:
             - AttributeName: active
               KeyType: HASH
           Projection:
             ProjectionType: ALL
-        - IndexName: bundle_ID-ID-index
+        - IndexName: application_ID-name-index
           KeySchema:
-            - AttributeName: bundle_ID
-              KeyType: HASH
-            - AttributeName: ID
-              KeyType: RANGE
-          Projection:
-            ProjectionType: KEYS_ONLY
-        - IndexName: bundle_ID-name-index
-          KeySchema:
-            - AttributeName: bundle_ID
+            - AttributeName: application_ID
               KeyType: HASH
             - AttributeName: name
               KeyType: RANGE
           Projection:
             ProjectionType: KEYS_ONLY
-        - IndexName: bundle_ID-index
+        - IndexName: application_ID-index
           KeySchema:
-            - AttributeName: bundle_ID
+            - AttributeName: application_ID
+              KeyType: HASH
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - ID
+        - IndexName: application_ID-index
+          KeySchema:
+            - AttributeName: application_ID
               KeyType: HASH
           Projection:
             ProjectionType: INCLUDE
