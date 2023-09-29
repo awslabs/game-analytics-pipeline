@@ -19,7 +19,7 @@ fi
 
 DIST_OUTPUT_BUCKET="analytics-output-bucket"
 STACK_NAME="analytics-$ENVIRONMENT"
-VERSION="v1"
+VERSION="v2"
 
 # Run following commands only the first time to create bucket.
 # aws s3 mb s3://$DIST_OUTPUT_BUCKET --region $AWS_REGION
@@ -29,7 +29,7 @@ chmod +x ./build-s3-dist.sh
 chmod +x ./deploy-remote-config.sh
 
 # Build project
-./build-s3-dist.sh $DIST_OUTPUT_BUCKET $STACK_NAME $VERSION
+./build-s3-dist.sh $DIST_OUTPUT_BUCKET analytics/$ENVIRONMENT $VERSION
 
 # Store Regional Assets to S3
 aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control

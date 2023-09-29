@@ -56,13 +56,13 @@ done
 
 cd ..
 echo "Updating code source bucket in template with $1"
-replace="s/%%BUCKET_NAME%%/$1/g"
+replace="s|%%BUCKET_NAME%%|$1|g"
 echo "sed -i -e $replace $template_dist_dir/*.template"
 sed -i -e $replace $template_dist_dir/*.template
-replace="s/%%SOLUTION_NAME%%/$2/g"
+replace="s|%%SOLUTION_NAME%%|$2|g"
 echo "sed -i -e $replace $template_dist_dir/*.template"
 sed -i -e $replace $template_dist_dir/*.template
-replace="s/%%VERSION%%/$3/g"
+replace="s|%%VERSION%%|$3|g"
 echo "sed -i -e $replace $template_dist_dir/*.template"
 sed -i -e $replace $template_dist_dir/*.template
 

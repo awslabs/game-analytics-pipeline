@@ -1248,6 +1248,12 @@ Resources:
         - AttributeName: ID
           KeyType: HASH
       GlobalSecondaryIndexes:
+        - IndexName: active-index
+          KeySchema:
+            - AttributeName: active
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
         - IndexName: application_ID-active-index
           KeySchema:
             - AttributeName: application_ID
@@ -2020,8 +2026,8 @@ Resources:
                   type: object
                   description: JSON object detailing device data
                 remote_config:
-                  type: object
-                  description: JSON object detailing player's A/B test groups
+                  type: array
+                  description: array of JSON objects detailing player's A/B test groups
                 event_data:
                   type: object
           securitySchemes:
