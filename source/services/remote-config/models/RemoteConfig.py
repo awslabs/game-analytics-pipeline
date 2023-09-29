@@ -65,7 +65,7 @@ class RemoteConfig:
     @staticmethod
     def get_all_from_uid(
         database: DynamoDBServiceResource, uid: str, application_ID: str
-    ) -> list[dict[str, str]]:
+    ) -> dict[str, dict[str, str]]:
         """
         This method returns a list of all remote configs from an uid.
         If a remote config has an active ABTest, we retrieve his group, or set the user to a group if it has none.
@@ -75,13 +75,14 @@ class RemoteConfig:
             KeyConditionExpression=Key("application_ID").eq(application_ID) & Key("active").eq(1)
         )
 
-        remote_configs = []
+        remote_configs = {}
         for remote_config_data in response["Items"]:
             remote_config = RemoteConfig(
                 database, remote_config_data.pop("ID"), remote_config_data
             )
             abtest = ABTest.active_from_remote_config_id(database, remote_config.id)
-            remote_configs.append(remote_config.to_user_remote_config(uid, abtest))
+            user_remote_config = remote_config.to_user_remote_config(uid, abtest)
+            remote_configs[user_remote_config.pop("name")] = user_remote_config
 
         return remote_configs
 

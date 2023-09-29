@@ -2026,8 +2026,8 @@ Resources:
                   type: object
                   description: JSON object detailing device data
                 remote_config:
-                  type: array
-                  description: array of JSON objects detailing player's A/B test groups
+                  type: object
+                  description: JSON object detailing player's A/B test groups
                 event_data:
                   type: object
           securitySchemes:
