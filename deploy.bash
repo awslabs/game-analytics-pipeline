@@ -4,8 +4,10 @@ if [ -z $BRANCH_NAME ]; then
     export BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
 fi
 
+export AWS_PROFILE=dev
 PARAMETER_OVERRIDES=""
 if [ $BRANCH_NAME = "master" ]; then
+    export AWS_PROFILE=dev
     AWS_REGION="us-east-1"
     ENVIRONMENT="prod"
     PARAMETER_OVERRIDES="--parameter-overrides KinesisStreamShards=5 SolutionMode=Prod"
