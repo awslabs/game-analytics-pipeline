@@ -4,31 +4,47 @@ if [ -z $BRANCH_NAME ]; then
     export BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
 fi
 
+PARAMETER_OVERRIDES=""
 if [ $BRANCH_NAME = "master" ]; then
-    export AWS_REGION="us-east-1"
-    STACK_NAME="analytics-prod"
+    AWS_REGION="us-east-1"
+    ENVIRONMENT="prod"
+    PARAMETER_OVERRIDES="--parameter-overrides KinesisStreamShards=5 SolutionMode=Prod"
+elif [ $BRANCH_NAME = "dev" ]; then
+    AWS_REGION="eu-west-3"
+    ENVIRONMENT="dev"
 else
-    export AWS_REGION="eu-west-3"
-    STACK_NAME="analytics-dev"
+    AWS_REGION="eu-west-3"
+    ENVIRONMENT="sandbox"
 fi
 
 DIST_OUTPUT_BUCKET="analytics-output-bucket"
-VERSION="v1"
+STACK_NAME="analytics-$ENVIRONMENT"
+VERSION="v2"
 
 # Run following commands only the first time to create bucket.
 # aws s3 mb s3://$DIST_OUTPUT_BUCKET --region $AWS_REGION
 
 cd ./deployment
 chmod +x ./build-s3-dist.sh
+chmod +x ./deploy-remote-config.sh
 
 # Build project
-./build-s3-dist.sh $DIST_OUTPUT_BUCKET $STACK_NAME $VERSION
+./build-s3-dist.sh $DIST_OUTPUT_BUCKET analytics/$ENVIRONMENT $VERSION
 
 # Store Regional Assets to S3
-aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/$STACK_NAME/$VERSION --recursive --acl bucket-owner-full-control
+aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
 # Store Global Assets to S3
-aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/$STACK_NAME/$VERSION --recursive --acl bucket-owner-full-control
+aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
+
+# Deploy Remote Config API Gateway
+./deploy-remote-config.sh $ENVIRONMENT $AWS_REGION
 
 # Deploy CloudFormation by creating/updating Stack
-aws cloudformation deploy --template-file ./global-s3-assets/game-analytics-pipeline.template --stack-name $STACK_NAME --capabilities CAPABILITY_IAM  --s3-bucket $DIST_OUTPUT_BUCKET-$AWS_REGION
+aws cloudformation deploy \
+    --template-file ./global-s3-assets/game-analytics-pipeline.template \
+    --stack-name $STACK_NAME \
+    --capabilities CAPABILITY_IAM \
+    --s3-bucket $DIST_OUTPUT_BUCKET-$AWS_REGION \
+    --s3-prefix templates \
+    $PARAMETER_OVERRIDES

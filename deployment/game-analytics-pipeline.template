@@ -23,7 +23,7 @@ Parameters:
     AllowedValues:
       - 'Yes'
       - 'No'
-    Default: 'Yes'
+    Default: 'No'
   SolutionAdminEmailAddress:
     Type: String
     Description: |
@@ -458,6 +458,9 @@ Resources:
           AUTHORIZATIONS_TABLE: !Ref AuthorizationsTable
           APPLICATION_AUTHORIZATIONS_INDEX: 'ApplicationAuthorizations'
           APPLICATIONS_TABLE: !Ref ApplicationsTable
+          ABTESTS_TABLE: !Ref ABTestsTable
+          REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
+          USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
       Policies:
         Version: 2012-10-17
         Statement:
@@ -484,7 +487,13 @@ Resources:
             Resource:
               - !GetAtt ApplicationsTable.Arn
               - !GetAtt AuthorizationsTable.Arn
+              - !GetAtt ABTestsTable.Arn
+              - !GetAtt RemoteConfigsTable.Arn
+              - !GetAtt UsersABTestsTable.Arn
               - !Sub '${AuthorizationsTable.Arn}/index/*'
+              - !Sub '${ABTestsTable.Arn}/index/*'
+              - !Sub '${RemoteConfigsTable.Arn}/index/*'
+              - !Sub '${UsersABTestsTable.Arn}/index/*'
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -515,6 +524,7 @@ Resources:
         ServerSideEncryptionConfiguration:
         - ServerSideEncryptionByDefault:
             SSEAlgorithm: AES256
+      BucketName: !Sub '${AWS::StackName}-analyticsbucket'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -576,6 +586,7 @@ Resources:
         ServerSideEncryptionConfiguration:
         - ServerSideEncryptionByDefault:
             SSEAlgorithm: AES256
+      BucketName: !Sub '${AWS::StackName}-solutionlogsbucket'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: True
         BlockPublicPolicy: True
@@ -631,6 +642,7 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
+        Name: !Sub '${AWS::StackName}'
         Description: !Sub 'Database for game analytics events for stack ${AWS::StackName}'
         LocationUri: !Sub 's3://${AnalyticsBucket}'
   
@@ -683,13 +695,7 @@ Resources:
               Type: string
             - Name: event_timestamp
               Type: bigint
-            - Name: app_version
-              Type: string
             - Name: application_name
-              Type: string
-            - Name: user
-              Type: string
-            - Name: device
               Type: string
             - Name: event_data 
               Type: string
@@ -697,9 +703,13 @@ Resources:
               Type: string
             - Name: game_time
               Type: bigint
-            - Name: event_version
+            - Name: app_info
               Type: string
-            - Name: application_id
+            - Name: user
+              Type: string
+            - Name: device
+              Type: string
+            - Name: event_version
               Type: string
             - Name: metadata
               Type: string
@@ -1149,6 +1159,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-applications'
       AttributeDefinitions:
         - AttributeName: application_id
           AttributeType: S
@@ -1165,6 +1177,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-authorizations'
       AttributeDefinitions:
         - AttributeName: api_key_id
           AttributeType: S
@@ -1207,6 +1221,8 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-idempotency'
       AttributeDefinitions:
         - AttributeName: event_id
           AttributeType: S
@@ -1221,6 +1237,169 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: expires_timestamp
         Enabled: true
+
+  RemoteConfigsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-remote-configs'
+      AttributeDefinitions:
+        - AttributeName: ID
+          AttributeType: S
+        - AttributeName: active
+          AttributeType: N
+        - AttributeName: application_ID
+          AttributeType: S
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ID
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: active-index
+          KeySchema:
+            - AttributeName: active
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: application_ID-active-index
+          KeySchema:
+            - AttributeName: application_ID
+              KeyType: HASH
+            - AttributeName: active
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: active-index
+          KeySchema:
+            - AttributeName: active
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: application_ID-name-index
+          KeySchema:
+            - AttributeName: application_ID
+              KeyType: HASH
+            - AttributeName: name
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
+        - IndexName: application_ID-index
+          KeySchema:
+            - AttributeName: application_ID
+              KeyType: HASH
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - ID
+        - IndexName: application_ID-index
+          KeySchema:
+            - AttributeName: application_ID
+              KeyType: HASH
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - ID
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
+  ABTestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-abtests'
+      AttributeDefinitions:
+        - AttributeName: ID
+          AttributeType: S
+        - AttributeName: active
+          AttributeType: N
+        - AttributeName: name
+          AttributeType: S
+        - AttributeName: remote_config_ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ID
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: active-index
+          KeySchema:
+            - AttributeName: active
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: remote_config_ID-index
+          KeySchema:
+            - AttributeName: remote_config_ID
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: remote_config_ID-name-index
+          KeySchema:
+            - AttributeName: remote_config_ID
+              KeyType: HASH
+            - AttributeName: name
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
+  ABTestsHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-abtests-history'
+      AttributeDefinitions:
+        - AttributeName: abtest_ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: abtest_ID  
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
+  UsersABTestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-users-abtests'
+      AttributeDefinitions:
+        - AttributeName: uid
+          AttributeType: S
+        - AttributeName: abtest_ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: uid
+          KeyType: HASH
+        - AttributeName: abtest_ID
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: abtest_ID-index
+          KeySchema:
+            - AttributeName: abtest_ID
+              KeyType: HASH
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes:
+              - uid
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
   
   
   ####################
@@ -1721,7 +1900,9 @@ Resources:
                             ""aws_ga_api_validated_flag"": true,
                             ""aws_ga_api_requestId"": ""$context.requestId"",
                             ""aws_ga_api_requestTimeEpoch"": $context.requestTimeEpoch,
-                            ""application_id"": ""$util.escapeJavaScript($input.params().path.get('applicationId'))""
+                            ""application_id"": ""$util.escapeJavaScript($input.params().path.get('applicationId'))"",
+                            ""ip_adress"": ""$context.identity.sourceIp"",
+                            ""country"": ""$input.params('CloudFront-Viewer-Country')""
                           }" )
                           {
                             "Data": "$util.base64Encode($output)",
@@ -1759,6 +1940,19 @@ Resources:
                           "error": $input.json('$.__type'),
                           "error_detail": $input.json('$.message')
                         }
+          "/applications/{applicationId}/remote-configs/{userID}":
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApplicationAdminServiceFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+              responses: {}
+              parameters:
+                paths:
+                  applicationId: true
+                  userID: true
+              security: []
+              summary: Attribute and returns Remote Configs for a user for an application
         components:
           schemas:
             ErrorException:
@@ -1814,8 +2008,9 @@ Resources:
                   - event_name
                   - event_timestamp
                   - event_name
-                  - app_version
+                  - event_version
                   - game_time
+                  - app_info
                   - user
                   - device
                   - remote_config
@@ -1837,16 +2032,15 @@ Resources:
                   type: string
                   pattern: "^[A-Za-z0-9-_.]+$"
                   description: An API version for this event format.
-                app_version:
-                  type: string
-                  pattern: "^[A-Za-z0-9-_.]+$"
-                  description: Version identifier for the application that generated the event
                 event_timestamp:
                   type: number
                   description: The time in seconds since the Unix epoch at which this event occurred (set by producer of event).
                 game_time:
                   type: number
                   description: The gaming time of a session in seconds.
+                app_info:
+                  type: object
+                  description: JSON object detailing app data
                 user:
                   type: object
                   description: JSON object detailing user data

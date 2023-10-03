@@ -1,0 +1,9 @@
+black==23.7.0
+boto3==1.28.57
+boto3-stubs[essential] # boto3 local typing
+flask==2.3.2
+flask_cors==4.0.0
+
+# To install zappa dependencie, we fork repository
+# Documentation : https://github.com/Miserlou/Zappa/issues/1977
+git+https://github.com/GEODE-SAS/Zappa.git

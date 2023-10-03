@@ -1,0 +1,13 @@
+{
+    "%%ENVIRONMENT%%": {
+        "app_function": "main.app",
+        "aws_region": "%%AWS_REGION%%",
+        "s3_bucket": "zappa-bucket-%%AWS_REGION%%",
+        "environment_variables": {
+            "GEODE_ENVIRONMENT": "%%ENVIRONMENT%%"
+        },
+        "project_name": "remote-config",
+        "role_name": "remote-config-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
+        "runtime": "python3.10"
+    }
+}
