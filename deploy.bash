@@ -7,7 +7,7 @@ fi
 export AWS_PROFILE=dev
 PARAMETER_OVERRIDES=""
 if [ $BRANCH_NAME = "master" ]; then
-    export AWS_PROFILE=dev
+    export AWS_PROFILE=prod
     AWS_REGION="us-east-1"
     ENVIRONMENT="prod"
     PARAMETER_OVERRIDES="--parameter-overrides KinesisStreamShards=5 SolutionMode=Prod"
