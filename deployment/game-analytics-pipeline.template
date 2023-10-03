@@ -458,6 +458,9 @@ Resources:
           AUTHORIZATIONS_TABLE: !Ref AuthorizationsTable
           APPLICATION_AUTHORIZATIONS_INDEX: 'ApplicationAuthorizations'
           APPLICATIONS_TABLE: !Ref ApplicationsTable
+          ABTESTS_TABLE: !Ref ABTestsTable
+          REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
+          USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
       Policies:
         Version: 2012-10-17
         Statement:
@@ -484,7 +487,13 @@ Resources:
             Resource:
               - !GetAtt ApplicationsTable.Arn
               - !GetAtt AuthorizationsTable.Arn
+              - !GetAtt ABTestsTable.Arn
+              - !GetAtt RemoteConfigsTable.Arn
+              - !GetAtt UsersABTestsTable.Arn
               - !Sub '${AuthorizationsTable.Arn}/index/*'
+              - !Sub '${ABTestsTable.Arn}/index/*'
+              - !Sub '${RemoteConfigsTable.Arn}/index/*'
+              - !Sub '${UsersABTestsTable.Arn}/index/*'
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -1931,6 +1940,19 @@ Resources:
                           "error": $input.json('$.__type'),
                           "error_detail": $input.json('$.message')
                         }
+          "/applications/{applicationId}/remote-configs/{userID}":
+            get:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApplicationAdminServiceFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+              responses: {}
+              parameters:
+                paths:
+                  applicationId: true
+                  userID: true
+              security: []
+              summary: Attribute and returns Remote Configs for a user for an application
         components:
           schemas:
             ErrorException:

@@ -185,7 +185,79 @@ class Application {
       });
     }
   }
-  
+
+  /**
+  * Get Remote Configs for a user
+  */
+  async getRemoteConfigsFromUserID(applicationId, userId) {
+    const remoteConfigs = {}
+    const docClient = new AWS.DynamoDB.DocumentClient(this.config);
+    const remoteConfigsParams = {
+      TableName: process.env.REMOTE_CONFIGS_TABLE,
+      IndexName: 'application_ID-active-index',
+      KeyConditionExpression: 'application_ID = :application_ID and active = :active',
+      ExpressionAttributeValues: {
+        ':application_ID': applicationId,
+        ':active': 1
+      }
+    }
+
+    const remoteConfigsResult = await docClient.query(remoteConfigsParams).promise()
+    await Promise.all(remoteConfigsResult.Items.map(async function(remoteConfig) {
+      let value = remoteConfig.reference_value;
+      let valueOrigin = "reference_value";
+
+      const abtestsParams = {
+        TableName: process.env.ABTESTS_TABLE,
+        IndexName: 'active-index',
+        KeyConditionExpression: 'active = :active',
+        FilterExpression: 'remote_config_ID = :remote_config_ID and paused = :paused',
+        ExpressionAttributeValues: {
+          ':active': 1,
+          ':remote_config_ID': remoteConfig.ID,
+          ':paused': false
+        },
+      }
+      const abtestsResult = await docClient.query(abtestsParams).promise()
+      const [abtest = undefined] = abtestsResult.Items;
+
+      if (abtest) {
+        const usersAbtestsParams = {
+          TableName: process.env.USERS_ABTESTS_TABLE,
+          Key: {"uid": userId, "abtest_ID": abtest.ID}
+        }
+        const usersAbtestsResult = await docClient.get(usersAbtestsParams).promise()
+        if (!usersAbtestsResult.Item) {
+          const isInTest = Math.floor(Math.random() * 100) < abtest.target_user_percent
+          valueOrigin = isInTest ? "abtest" : "reference_value"
+          if (isInTest) {
+            const choices = [remoteConfig.reference_value, ...abtest.variants]
+            value = choices[Math.floor(Math.random() * choices.length)]
+          }
+          const putUsersAbtestsParams = {
+            TableName: process.env.USERS_ABTESTS_TABLE,
+            Item: {
+              "uid": userId,
+              "abtest_ID": abtest.ID,
+              "is_in_test": isInTest,
+              "value": value,
+            }
+          }
+          await docClient.put(putUsersAbtestsParams).promise()
+        } else {
+          value = usersAbtestsResult.Item.value
+          valueOrigin = usersAbtestsResult.Item.is_in_test ? "abtest" : "reference_value"
+        }
+      }
+
+      remoteConfigs[remoteConfig.name] = {
+        "value": value,
+        "value_origin": valueOrigin,
+      };
+    }));
+    return remoteConfigs
+  }
+
   /**
    * List application authorizations
    * Query authorizations index to get authorizations for application

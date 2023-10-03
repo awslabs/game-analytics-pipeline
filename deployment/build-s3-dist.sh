@@ -109,6 +109,20 @@ cd $source_dir/resources/solution-helper
 npm run build
 cp ./dist/solution-helper.zip $build_dist_dir/solution-helper.zip
 
+# echo "------------------------------------------------------------------------------"
+# echo "Packaging Lambda Function - Remote Configs"
+# echo "------------------------------------------------------------------------------"
+# cd $source_dir/services/remote-config
+# rm -r dist 2>/dev/null
+# rsync -av --exclude=.venv/ --exclude=dist/ --exclude=documentation.yaml --exclude=README.md --exclude=zappa_settings.json * dist >/dev/null
+# cd dist
+# python3 -m venv .venv
+# source .venv/bin/activate
+# pip install -r requirements.txt --target . >/dev/null
+# zip -r remote-config.zip . >/dev/null
+# cp remote-config.zip $build_dist_dir/remote-config.zip
+# deactivate
+
 echo "------------------------------------------------------------------------------"
 echo "Copying Glue ETL Code to regional assets folder"
 echo "------------------------------------------------------------------------------"
