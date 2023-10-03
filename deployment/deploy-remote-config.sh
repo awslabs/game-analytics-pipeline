@@ -9,9 +9,15 @@ rm -rf $remote_config_dist_dir
 echo "mkdir -p $remote_config_dist_dir"
 mkdir -p $remote_config_dist_dir
 
+PROFILE_NAME="dev"
+if [ $1 = "prod" ]; then
+    PROFILE_NAME="prod"
+fi
+
 rsync -av --exclude='.venv/' $source_dir/services/remote-config/* $remote_config_dist_dir >/dev/null
 sed -i '' s/%%ENVIRONMENT%%/$1/g $remote_config_dist_dir/zappa_settings.json
 sed -i '' s/%%AWS_REGION%%/$2/g $remote_config_dist_dir/zappa_settings.json
+sed -i '' s/%%PROFILE_NAME%%/$PROFILE_NAME/g $remote_config_dist_dir/zappa_settings.json
 
 echo "------------------------------------------------------------------------------"
 echo "Build Remote Config project"

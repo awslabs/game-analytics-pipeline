@@ -6,6 +6,7 @@
         "environment_variables": {
             "GEODE_ENVIRONMENT": "%%ENVIRONMENT%%"
         },
+        "profile_name": "%%PROFILE_NAME%%",
         "project_name": "remote-config",
         "role_name": "remote-config-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
         "runtime": "python3.10"
