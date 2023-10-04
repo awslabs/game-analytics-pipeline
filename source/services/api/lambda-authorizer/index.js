@@ -23,6 +23,7 @@
  */
 const AWS = require('aws-sdk');
 console.log('Loading function');
+const CHINA_REGIONS = ["cn-north-1", "cn-northwest-1"]
 
 
 /**
@@ -151,7 +152,8 @@ AuthPolicy.prototype = (function AuthPolicyClass() {
         if (resource.substring(0, 1) === '/') {
             cleanedResource = resource.substring(1, resource.length);
         }
-        const resourceArn = `arn:aws:execute-api:${this.region}:${this.awsAccountId}:${this.restApiId}/${this.stage}/${verb}/${cleanedResource}`;
+        const awsPartition = CHINA_REGIONS.includes(this.region) ? "aws-cn" : "aws"
+        const resourceArn = `arn:${awsPartition}:execute-api:${this.region}:${this.awsAccountId}:${this.restApiId}/${this.stage}/${verb}/${cleanedResource}`;
 
         if (effect.toLowerCase() === 'allow') {
             this.allowMethods.push({
