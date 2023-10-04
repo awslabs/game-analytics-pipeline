@@ -21,7 +21,7 @@ fi
 
 DIST_OUTPUT_BUCKET="analytics-output-bucket"
 STACK_NAME="analytics-$ENVIRONMENT"
-VERSION="v2"
+VERSION="v3"
 
 # Run following commands only the first time to create bucket.
 # aws s3 mb s3://$DIST_OUTPUT_BUCKET --region $AWS_REGION

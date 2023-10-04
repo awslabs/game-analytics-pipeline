@@ -1138,7 +1138,7 @@ Resources:
           InputFormatConfiguration:
             Deserializer:
               OpenXJsonSerDe:
-                CaseInsensitive: true
+                CaseInsensitive: false
                 ConvertDotsInJsonKeysToUnderscores: false
           OutputFormatConfiguration:
             Serializer:
