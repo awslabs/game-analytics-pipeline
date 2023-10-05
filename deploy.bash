@@ -1,8 +1,24 @@
+VERSION="v3"
+
 if [ -z $BRANCH_NAME ]; then
     # Jenkins runs script on git branch in a detached HEAD state.
     # Jenkins has BRANCH_NAME environment variable
     export BRANCH_NAME=`git rev-parse --abbrev-ref HEAD`
 fi
+
+# Check if we should deployed in China or World project
+IS_CHINA=false
+PROJECT_ENVIRONMENT="WORLD"
+for arg in $@; do
+    if [ $arg != "--china" ]; then
+        echo "Exit : Unknown tag $arg"
+        exit 1
+    fi
+    IS_CHINA=true
+    PROJECT_ENVIRONMENT="CHINA"
+done
+
+echo "Game Analytics Pipeline will deployed in $PROJECT_ENVIRONMENT project !\n"
 
 export AWS_PROFILE=dev
 PARAMETER_OVERRIDES=""
@@ -19,27 +35,29 @@ else
     ENVIRONMENT="sandbox"
 fi
 
+if $IS_CHINA; then
+    export AWS_PROFILE=$AWS_PROFILE-china
+    AWS_REGION="cn-north-1"
+fi
+
 DIST_OUTPUT_BUCKET="analytics-output-bucket"
 STACK_NAME="analytics-$ENVIRONMENT"
-VERSION="v3"
 
 # Run following commands only the first time to create bucket.
 # aws s3 mb s3://$DIST_OUTPUT_BUCKET --region $AWS_REGION
 
 cd ./deployment
-chmod +x ./build-s3-dist.sh
-chmod +x ./deploy-remote-config.sh
 
-# Build project
+# Build project (Templates + Lambdas)
 ./build-s3-dist.sh $DIST_OUTPUT_BUCKET analytics/$ENVIRONMENT $VERSION
 
-# Store Regional Assets to S3
-aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
-
-# Store Global Assets to S3
+# Store Global Assets to S3 (Templates)
 aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
-# Deploy Remote Config API Gateway
+# Store Regional Assets to S3 (Lambdas)
+aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
+
+# Deploy Backoffce Remote Config API Gateway (Zappa)
 ./deploy-remote-config.sh $ENVIRONMENT $AWS_REGION
 
 # Deploy CloudFormation by creating/updating Stack
