@@ -895,7 +895,7 @@ Resources:
               - 'sts:AssumeRole'
       Path: '/'
       ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSGlueServiceRole'
       Policies:
         - PolicyName: GameAnalyticsPipelineGlueETL
           PolicyDocument:
@@ -2386,7 +2386,7 @@ Resources:
             AWS:
               Fn::Join:
               - ''
-              - - 'arn:aws:iam::'
+              - - !Sub 'arn:${AWS::Partition}:iam::'
                 - Ref: AWS::AccountId
                 - :root
           Action: '*'
