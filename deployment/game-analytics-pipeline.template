@@ -85,7 +85,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Description: 'Function creates a new date-based partition in Glue Database based on UTC Year/Month/Day'
+      Description: 'Function creates a new date-based partition in Glue Database based on UTC ApplicationName/Year/Month/Day'
       Runtime: nodejs14.x
       CodeUri: 
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
@@ -94,6 +94,7 @@ Resources:
       MemorySize: 128
       Environment:
         Variables:
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
           TABLE_NAME: !FindInMap [GlueSettings, RawEventsTable, TableName]
           DATABASE_NAME: !Ref GameEventsDatabase
       Events:
@@ -658,6 +659,8 @@ Resources:
         Name: !FindInMap [GlueSettings, RawEventsTable, TableName]
         TableType: 'EXTERNAL_TABLE'
         PartitionKeys: 
+          - Name: application_name
+            Type: string
           - Name: year
             Type: string
           - Name: month
@@ -695,8 +698,6 @@ Resources:
               Type: string
             - Name: event_timestamp
               Type: bigint
-            - Name: application_name
-              Type: string
             - Name: event_data 
               Type: string
             - Name: remote_config
@@ -1097,8 +1098,13 @@ Resources:
         BucketARN: !Sub 'arn:${AWS::Partition}:s3:::${AnalyticsBucket}'
         BufferingHints:
           IntervalInSeconds: !If [ConfigureDevMode, 60, 900] 
-          SizeInMBs: 128 
-        Prefix: !Join ['', [!FindInMap [GlueSettings, LocationS3Prefix, RawEventsS3Prefix], '/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/']]
+          SizeInMBs: 128
+        DynamicPartitioningConfiguration:
+          Enabled: true
+          RetryOptions:
+            DurationInSeconds: 300
+        # Prefix documentation : https://docs.aws.amazon.com/fr_fr/firehose/latest/dev/dynamic-partitioning.html#dynamic-partitioning-partitioning-keys
+        Prefix: !Join ['', [!FindInMap [GlueSettings, LocationS3Prefix, RawEventsS3Prefix], '/application_name=!{partitionKeyFromQuery:application_name}/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/']]
         ErrorOutputPrefix: firehose-errors/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/!{firehose:error-output-type}/
         CompressionFormat: UNCOMPRESSED # Parquet format is already compressed with SNAPPY
         RoleARN: !GetAtt GameEventsFirehoseRole.Arn
@@ -1115,6 +1121,13 @@ Resources:
                   ParameterValue: '3' 
                 - ParameterName: NumberOfRetries
                   ParameterValue: '3'
+            # https://stackoverflow.com/questions/51313937/can-i-customize-partitioning-in-kinesis-firehose-before-delivering-to-s3
+            - Type: MetadataExtraction
+              Parameters:
+                - ParameterName: MetadataExtractionQuery
+                  ParameterValue: "{application_name:.application_name}"
+                - ParameterName: JsonParsingEngine
+                  ParameterValue: JQ-1.6
         CloudWatchLoggingOptions:
           Enabled: true
           LogGroupName: !Ref FirehoseLogGroup
@@ -1130,7 +1143,7 @@ Resources:
           BufferingHints: 
             IntervalInSeconds: 900
             SizeInMBs: 128
-          Prefix: FirehoseS3SourceRecordBackup/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/
+          Prefix: FirehoseS3SourceRecordBackup/application_name=!{partitionKeyFromQuery:application_name}/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/
           ErrorOutputPrefix: FirehoseS3SourceRecordBackup/firehose-errors/year=!{timestamp:YYYY}/month=!{timestamp:MM}/day=!{timestamp:dd}/!{firehose:error-output-type}/
           RoleARN: !GetAtt GameEventsFirehoseRole.Arn
         DataFormatConversionConfiguration:

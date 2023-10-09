@@ -24,22 +24,51 @@ const glue = new AWS.Glue({ apiVersion: '2017-03-31' });
 global.StorageDescriptor = {};
 
 exports.handler = async (event) => {
-    var storageDescriptor = {};
     console.log(`Event: ${JSON.stringify(event)}`);
+
+    let length = 0;
+    const docClient = new AWS.DynamoDB.DocumentClient({
+        credentials: new AWS.EnvironmentCredentials('AWS'),
+        region: process.env.AWS_REGION,
+    });
+    try {
+        let result = await docClient.scan({ TableName: process.env.APPLICATIONS_TABLE }).promise();
+        length += result.Items.length;
+        if (length < 1) {
+            return Promise.reject({
+                code: 404,
+                error: 'NotFoundException',
+                message: 'No applications are registered with the solution.'
+            });
+        }
+        for (const item of result.Items) {
+            await checkPartition(item.application_name);
+        }
+    } catch (err) {
+        console.log(JSON.stringify(err));
+        return Promise.reject({
+            code: 500,
+            error: 'InternalFailure',
+            message: 'Error occurred while attempting to retrieve applications',
+        });
+    }
+};
+
+async function checkPartition(app_name) {
+    var storageDescriptor = {};
     const date = moment();
     const year = moment(date).format('YYYY');
     const month = moment(date).format('MM');
     const day = moment(date).format('DD');
     //const hour = moment(date).format('HH');
     console.log(`date: ${date}, year: ${year}, month: ${month}, day: ${day}`);
-    
     try {
         let result = await glue.getPartition({
             DatabaseName: process.env.DATABASE_NAME,
             TableName: process.env.TABLE_NAME,
-            PartitionValues: [String(year), String(month), String(day)]
+            PartitionValues: [String(app_name), String(year), String(month), String(day)]
         }).promise();
-        console.log(`Partition already exists for year=${year}/month=${month}/day=${day}`);
+        console.log(`Partition already exists for application_name=${app_name}/year=${year}/month=${month}/day=${day}`);
         return result;
     } catch (err) {
         // If partition does not exist, create a new one based on the S3 key
@@ -50,23 +79,23 @@ exports.handler = async (event) => {
         }).promise();
         console.log(`Table setting: ${JSON.stringify(Table)}`);
         storageDescriptor = Table.Table.StorageDescriptor;
-        if(err.code === 'EntityNotFoundException'){
+        if (err.code === 'EntityNotFoundException') {
             let params = {
                 DatabaseName: process.env.DATABASE_NAME,
                 TableName: process.env.TABLE_NAME,
                 PartitionInput: {
                     StorageDescriptor: {
                         ...storageDescriptor,
-                        Location: `${storageDescriptor.Location}/year=${year}/month=${month}/day=${day}`
+                        Location: `${storageDescriptor.Location}/application_name=${app_name}/year=${year}/month=${month}/day=${day}`
                     },
-                    Values: [String(year), String(month), String(day)],
+                    Values: [String(app_name), String(year), String(month), String(day)],
                 }
             };
             await glue.createPartition(params).promise();
-            console.log(`Created new table partition: ${storageDescriptor.Location}/year=${year}/month=${month}/day=${day}`);
+            console.log(`Created new table partition: ${storageDescriptor.Location}/application_name=${app_name}/year=${year}/month=${month}/day=${day}`);
         } else {
             console.log(`There was an error: ${JSON.stringify(err)}`);
             return err;
         }
     }
-};
+}

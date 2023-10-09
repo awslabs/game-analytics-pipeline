@@ -1,4 +1,4 @@
-VERSION="v3"
+VERSION="v4"
 
 if [ -z $BRANCH_NAME ]; then
     # Jenkins runs script on git branch in a detached HEAD state.
@@ -37,7 +37,7 @@ fi
 
 if $IS_CHINA; then
     export AWS_PROFILE=$AWS_PROFILE-china
-    AWS_REGION="cn-north-1"
+    AWS_REGION="cn-north-1" # The region is the same in dev and prod environment
 fi
 
 DIST_OUTPUT_BUCKET="analytics-output-bucket"
@@ -58,7 +58,7 @@ aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENV
 aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
 # Deploy Backoffce Remote Config API Gateway (Zappa)
-./deploy-remote-config.sh $ENVIRONMENT $AWS_REGION
+# ./deploy-remote-config.sh $ENVIRONMENT $AWS_REGION
 
 # Deploy CloudFormation by creating/updating Stack
 aws cloudformation deploy \
