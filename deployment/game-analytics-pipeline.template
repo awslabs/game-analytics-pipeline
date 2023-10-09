@@ -132,6 +132,12 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+            - Sid: DynamoAccess
+              Effect: Allow
+              Action:
+                - dynamodb:Scan
+              Resource: 
+                - !GetAtt ApplicationsTable.Arn
     Metadata:
       cfn_nag:
         rules_to_suppress:
