@@ -7,8 +7,8 @@
             "GEODE_ENVIRONMENT": "%%ENVIRONMENT%%"
         },
         "profile_name": "%%PROFILE_NAME%%",
-        "project_name": "remote-config",
-        "role_name": "remote-config-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
+        "project_name": "analytics-backoffice",
+        "role_name": "analytics-backoffice-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
         "runtime": "python3.10"
     }
 }

@@ -1,7 +1,7 @@
 # compiled output
 **/global-s3-assets
 **/regional-s3-assets
-**/remote-config-assets
+**/analytics-backoffice-assets
 **/tmp
 **/env
 **/node_modules

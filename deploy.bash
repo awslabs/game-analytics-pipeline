@@ -49,22 +49,22 @@ STACK_NAME="analytics-$ENVIRONMENT"
 cd ./deployment
 
 # Build project (Templates + Lambdas)
-./build-s3-dist.sh $DIST_OUTPUT_BUCKET analytics/$ENVIRONMENT $VERSION
+# ./build-s3-dist.sh $DIST_OUTPUT_BUCKET analytics/$ENVIRONMENT $VERSION
 
-# Store Global Assets to S3 (Templates)
-aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
+# # Store Global Assets to S3 (Templates)
+# aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
-# Store Regional Assets to S3 (Lambdas)
-aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
+# # Store Regional Assets to S3 (Lambdas)
+# aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
 # Deploy Backoffce Remote Config API Gateway (Zappa)
-# ./deploy-remote-config.sh $ENVIRONMENT $AWS_REGION
+./deploy-analytics-backoffice.sh $ENVIRONMENT $AWS_REGION
 
-# Deploy CloudFormation by creating/updating Stack
-aws cloudformation deploy \
-    --template-file ./global-s3-assets/game-analytics-pipeline.template \
-    --stack-name $STACK_NAME \
-    --capabilities CAPABILITY_IAM \
-    --s3-bucket $DIST_OUTPUT_BUCKET-$AWS_REGION \
-    --s3-prefix templates \
-    $PARAMETER_OVERRIDES
+# # Deploy CloudFormation by creating/updating Stack
+# aws cloudformation deploy \
+#     --template-file ./global-s3-assets/game-analytics-pipeline.template \
+#     --stack-name $STACK_NAME \
+#     --capabilities CAPABILITY_IAM \
+#     --s3-bucket $DIST_OUTPUT_BUCKET-$AWS_REGION \
+#     --s3-prefix templates \
+#     $PARAMETER_OVERRIDES
