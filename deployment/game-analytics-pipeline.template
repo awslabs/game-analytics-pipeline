@@ -132,6 +132,12 @@ Resources:
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
                 - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+            - Sid: DynamoAccess
+              Effect: Allow
+              Action:
+                - dynamodb:Scan
+              Resource: 
+                - !GetAtt ApplicationsTable.Arn
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -2975,7 +2981,7 @@ Outputs:
     Value:
       !Join
         - ''
-        - - !Sub 'https://${GameAnalyticsApi}.execute-api.${AWS::Region}.amazonaws.com/'
+        - - !Sub 'https://${GameAnalyticsApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/'
           - !FindInMap [ApiConfiguration, StageSettings, StageName]
   PipelineOperationsDashboard:
     Description: 'CloudWatch Dashboard for viewing pipeline metrics'
