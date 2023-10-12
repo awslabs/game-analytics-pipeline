@@ -7,7 +7,6 @@ const NodeCache = require('node-cache');
  * Applications table results cache
  * Maintains a local cache of registered Applications in DynamoDB. 
  */
-global.remoteConfigsCache = new NodeCache({ stdTTL: process.env.CACHE_TIMEOUT_SECONDS, checkPeriod: 60, maxKeys: 1000, useClones: false });
 global.abtestsCache = new NodeCache({ stdTTL: process.env.CACHE_TIMEOUT_SECONDS, checkPeriod: 60, maxKeys: 1000, useClones: false });
 
 const respond = async (event, context) => {
@@ -15,7 +14,7 @@ const respond = async (event, context) => {
   console.log(`Event : ${JSON.stringify(event)}`);
   console.log(`Context : ${JSON.stringify(context)}`);
 
-  const { applicationId, userId } = event;
+  const { userId } = event;
 
   const remoteConfigs = {}
   const docClient = new AWS.DynamoDB.DocumentClient({
@@ -24,20 +23,16 @@ const respond = async (event, context) => {
   });
 
 
-  let remoteConfigsResult = global.remoteConfigsCache.get(applicationId);
-  if (remoteConfigsResult === undefined) {
-    const remoteConfigsParams = {
-      TableName: process.env.REMOTE_CONFIGS_TABLE,
-      IndexName: 'application_ID-active-index',
-      KeyConditionExpression: 'application_ID = :application_ID and active = :active',
-      ExpressionAttributeValues: {
-        ':application_ID': applicationId,
-        ':active': 1
-      }
+  const remoteConfigsParams = {
+    TableName: process.env.REMOTE_CONFIGS_TABLE,
+    IndexName: 'active-index',
+    KeyConditionExpression: 'active = :active',
+    ExpressionAttributeValues: {
+      ':active': 1
     }
-    remoteConfigsResult = await docClient.query(remoteConfigsParams).promise()
-    global.remoteConfigsCache.set(applicationId, remoteConfigsResult);
   }
+  const remoteConfigsResult = await docClient.query(remoteConfigsParams).promise()
+
   await Promise.all(remoteConfigsResult.Items.map(async function (remoteConfig) {
     let value = remoteConfig.reference_value;
     let valueOrigin = "reference_value";
