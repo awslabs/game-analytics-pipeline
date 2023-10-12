@@ -87,6 +87,12 @@ cd $source_dir/services/api/admin
 npm run build
 cp dist/admin.zip $build_dist_dir/admin.zip
 
+echo "------------------------------------------------------------------------------"  
+echo "Packaging Lambda Function - Remote Configs service"  
+echo "------------------------------------------------------------------------------"  
+cd $source_dir/services/api/remote-configs
+npm run build
+cp dist/remote-configs.zip $build_dist_dir/remote-configs.zip
 
 echo "------------------------------------------------------------------------------"  
 echo "Packaging Lambda Function - Lambda Authorizer"  
