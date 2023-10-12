@@ -8,8 +8,8 @@
             "PROJECT_NAME": "%%PROJECT_NAME%%-backoffice"
         },
         "profile_name": "%%PROFILE_NAME%%",
-        "project_name": "PROJECT_NAME-backoffice",
-        "role_name": "PROJECT_NAME-backoffice-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
+        "project_name": "%%PROJECT_NAME%%-backoffice",
+        "role_name": "%%PROJECT_NAME%%-backoffice-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
         "runtime": "python3.10"
     }
 }
