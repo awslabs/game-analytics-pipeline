@@ -1981,7 +1981,9 @@ Resources:
                     application/json:
                       schema:
                         $ref: "#/components/schemas/ErrorException"
-              security:
+              security: !If
+                - ConfigureDevMode
+                - []
                 - lambda_authorizer: []
               x-amazon-apigateway-integration:
                 uri: !Sub "arn:${AWS::Partition}:apigateway:${AWS::Region}:kinesis:action/PutRecords"
