@@ -4,7 +4,7 @@ This module contains constants.
 import os
 
 
-__table_prefix = f"analytics-{os.environ['GEODE_ENVIRONMENT']}"
+__table_prefix = f"{os.environ['PROJECT_NAME']}-{os.environ['GEODE_ENVIRONMENT']}"
 
 MAX_ACTIVATED_ABTESTS = 4
 

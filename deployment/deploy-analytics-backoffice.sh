@@ -12,6 +12,7 @@ mkdir -p $analytics_backoffice_dist_dir
 rsync -av --exclude='.venv/' $source_dir/services/analytics-backoffice/* $analytics_backoffice_dist_dir >/dev/null
 sed -i '' s/%%ENVIRONMENT%%/$1/g $analytics_backoffice_dist_dir/zappa_settings.json
 sed -i '' s/%%AWS_REGION%%/$2/g $analytics_backoffice_dist_dir/zappa_settings.json
+sed -i '' s/%%PROJECT_NAME%%/$3/g $analytics_backoffice_dist_dir/zappa_settings.json
 sed -i '' s/%%PROFILE_NAME%%/$AWS_PROFILE/g $analytics_backoffice_dist_dir/zappa_settings.json
 
 echo "------------------------------------------------------------------------------"

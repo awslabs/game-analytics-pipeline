@@ -84,6 +84,7 @@ Resources:
   GluePartitionCreator:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-GluePartitionCreator'
       Handler: index.handler
       Description: 'Function creates a new date-based partition in Glue Database based on UTC ApplicationName/Year/Month/Day'
       Runtime: nodejs14.x
@@ -149,6 +150,7 @@ Resources:
   EventsProcessingFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-EventsProcessingFunction'
       Handler: index.handler
       Description: 'Function to process and transform raw events before they get written to S3'
       Runtime: nodejs14.x
@@ -205,11 +207,76 @@ Resources:
           - id: W84
             reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
 
-  
+  RemoteConfigsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-RemoteConfigsFunction'
+      Handler: index.handler
+      Description: 'Function to process to fetch remote configs for a user'
+      Runtime: nodejs14.x
+      CodeUri: 
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "remote-configs.zip"]]
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          ABTESTS_TABLE: !Ref ABTestsTable
+          REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
+          USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
+          CACHE_TIMEOUT_SECONDS: 60
+      Policies:
+        Version: 2012-10-17
+        Statement:
+          - Sid: CWLogs
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutDestination
+              - logs:PutLogEvents
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+          - Sid: DynamoDBAccess
+            Effect: Allow
+            Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:GetRecords
+              - dynamodb:Query
+              - dynamodb:Scan
+            Resource:
+              - !GetAtt ABTestsTable.Arn
+              - !Sub ${ABTestsTable.Arn}/index/*
+              - !GetAtt RemoteConfigsTable.Arn
+              - !Sub ${RemoteConfigsTable.Arn}/index/*
+              - !GetAtt UsersABTestsTable.Arn
+              - !Sub ${UsersABTestsTable.Arn}/index/*
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+          - id: W92
+            reason: 'Does not require reserved concurrency and is invoked by kinesis data firehose, which has built in retry, customers can configure reserved concurrency after deployment based on their own requirements.'
+
+  RemoteConfigsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${RemoteConfigsFunction}'
+      RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
+
   AnalyticsProcessingFunction:
     Condition: StreamingAnalytics
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-AnalyticsProcessingFunction'
       CodeUri:
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
         Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "analytics-processing.zip"]]
@@ -235,6 +302,7 @@ Resources:
     Condition: StreamingAnalytics
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-AnalyticsProcessingRole'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -291,6 +359,7 @@ Resources:
   SolutionHelper:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-SolutionHelper'
       Description: 'Solution Helper utility function'
       CodeUri:
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
@@ -394,6 +463,7 @@ Resources:
   LambdaAuthorizer:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-LambdaAuthorizer'
       Handler: index.handler
       Description: 'Lambda Authorizer'
       Runtime: nodejs14.x
@@ -452,6 +522,7 @@ Resources:
   ApplicationAdminServiceFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-ApplicationAdminServiceFunction'
       Handler: index.handler
       Description: 'Application admin service'
       Runtime: nodejs14.x
@@ -723,7 +794,7 @@ Resources:
 
   EtlJobStatusEvents:
     Type: AWS::Events::Rule
-    Properties: 
+    Properties:
       Description: !Sub 'CloudWatch Events Rule for generating status events for Glue ETL Job for stack ${AWS::StackName}'
       EventPattern:
         source: 
@@ -742,6 +813,7 @@ Resources:
   GlueCrawlerStatusEvents:
     Type: AWS::Events::Rule
     Properties: 
+      Name: !Sub '${AWS::StackName}-EtlJobStatusEvents'
       Description: !Sub 'CloudWatch Events Rule for generating status events for Glue Crawler, for stack ${AWS::StackName}'
       EventPattern:
         source: 
@@ -761,6 +833,7 @@ Resources:
   EventsCrawler:
     Type: AWS::Glue::Crawler
     Properties:
+      Name: !Sub '${AWS::StackName}-EventsCrawler'
       Role: !GetAtt GlueCrawlerRole.Arn
       Description: !Sub 'AWS Glue Crawler for partitioned data, for stack ${AWS::StackName}'
       DatabaseName: !Ref GameEventsDatabase
@@ -780,6 +853,7 @@ Resources:
   GlueCrawlerRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-GlueCrawlerRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -850,6 +924,7 @@ Resources:
   GameEventsWorkflow:
     Type: AWS::Glue::Workflow
     Properties:
+      Name: !Sub '${AWS::StackName}-GameEventsWorkflow'
       Description: !Sub 'Orchestrates a Glue ETL Job and Crawler to process data in S3 and update data catalog, for stack ${AWS::StackName}'
       DefaultRunProperties:
         '--enable-metrics': 'true'
@@ -866,6 +941,7 @@ Resources:
   GameEventsCrawlerTrigger:
     Type: AWS::Glue::Trigger
     Properties:
+      Name: !Sub '${AWS::StackName}-GameEventsCrawlerTrigger'
       WorkflowName: !Ref GameEventsWorkflow
       StartOnCreation: true
       Type: CONDITIONAL
@@ -881,6 +957,7 @@ Resources:
   GameEventsTriggerETLJob:
     Type: AWS::Glue::Trigger
     Properties:
+      Name: !Sub '${AWS::StackName}-GameEventsTriggerETLJob'
       WorkflowName: !Ref GameEventsWorkflow
       Type: ON_DEMAND
       Description: !Sub 'Triggers the start of ETL job to process raw_events, for stack ${AWS::StackName}.'
@@ -891,6 +968,7 @@ Resources:
   GameEventsEtlRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-GameEventsEtlRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -973,6 +1051,7 @@ Resources:
     Type: AWS::Glue::Job
     DependsOn: CopyGlueETLScriptToS3
     Properties:
+      Name: !Sub '${AWS::StackName}-GameEventsEtlJob'
       Description: !Sub 'Etl job for processing raw game event data, for stack ${AWS::StackName}'
       Role: !Ref GameEventsEtlRole
       GlueVersion: '4.0'
@@ -1004,6 +1083,7 @@ Resources:
   GameEventsStream:
     Type: AWS::Kinesis::Stream
     Properties:
+      Name: !Sub '${AWS::StackName}-GameEventsStream'
       RetentionPeriodHours: 24
       ShardCount: !Ref KinesisStreamShards
       StreamEncryption:
@@ -1012,7 +1092,9 @@ Resources:
         
   GameEventsFirehoseRole:
     Type: AWS::IAM::Role
+    DependsOn: GameEventsStream
     Properties:
+      RoleName: !Sub '${AWS::StackName}-GameEventsFirehoseRole'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -1096,6 +1178,7 @@ Resources:
   GameEventsFirehose:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
+      DeliveryStreamName: !Sub '${AWS::StackName}-GameEventsFirehose'
       DeliveryStreamType: KinesisStreamAsSource
       KinesisStreamSourceConfiguration: 
         KinesisStreamARN: !GetAtt GameEventsStream.Arn
@@ -1497,6 +1580,7 @@ Resources:
   ApiGatewayRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-ApiGatewayRole'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
@@ -1526,8 +1610,9 @@ Resources:
                   - lambda:InvokeFunction
                 Resource: 
                   - !GetAtt ApplicationAdminServiceFunction.Arn
+                  - !GetAtt RemoteConfigsFunction.Arn
                   - !GetAtt LambdaAuthorizer.Arn
-     
+
   GameAnalyticsApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -1959,19 +2044,74 @@ Resources:
                           "error": $input.json('$.__type'),
                           "error_detail": $input.json('$.message')
                         }
-          "/applications/{applicationId}/remote-configs/{userID}":
+          "/applications/{applicationId}/remote-configs/{userId}":
             get:
-              x-amazon-apigateway-integration:
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ApplicationAdminServiceFunction.Arn}/invocations
-                httpMethod: POST
-                type: aws_proxy
-              responses: {}
+              operationId: GetRemoteConfigs
               parameters:
                 paths:
                   applicationId: true
-                  userID: true
+                  userId: true
               security: []
               summary: Attribute and returns Remote Configs for a user for an application
+              responses:
+                "200":
+                  description: Successful GET /remote-configs
+                  content:
+                    application/json: {}
+                "400":
+                  description: Bad Request Exception
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+                "401":
+                  description: Unauthorized Exception
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+                "500":
+                  description: Internal Server Error
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RemoteConfigsFunction.Arn}/invocations
+                credentials: !GetAtt ApiGatewayRole.Arn
+                httpMethod: POST
+                type: aws
+                requestParameters:
+                  integration.request.header.Content-Type: "'x-amz-json-1.1'"
+                requestTemplates:
+                  application/json: !Sub >
+                    {
+                      "applicationId": "$input.params('applicationId')",
+                      "userId": "$input.params('userId')"
+                    }
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseTemplates:
+                      application/json: ''
+                  "4\\d{2}":
+                    statusCode: "400"
+                    responseTemplates:
+                      application/json: !Sub >
+                        #set($inputRoot = $input.path('$'))
+                        {
+                          "error": "BadRequest",
+                          "error_detail": $input.json('$.message')
+                        }
+                  "5\\d{2}":
+                    statusCode: "500"
+                    responseTemplates:
+                      application/json: !Sub >
+                        #set($inputRoot = $input.path('$')) 
+                        {
+                          "error": $input.json('$.__type'),
+                          "error_detail": $input.json('$.message')
+                        }
         components:
           schemas:
             ErrorException:
@@ -2092,6 +2232,7 @@ Resources:
   ApiGatewayPushToCloudWatchRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-ApiGatewayPushToCloudWatchRole'
       Description: Push logs to CloudWatch logs from API Gateway
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -2320,6 +2461,7 @@ Resources:
     Condition: StreamingAnalytics
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-KinesisAnalyticsRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -2414,8 +2556,8 @@ Resources:
           Effect: Allow
           Principal:
             Service: 
-             - cloudwatch.amazonaws.com
-             - events.amazonaws.com
+            - cloudwatch.amazonaws.com
+            - events.amazonaws.com
           Action:
             - 'kms:Decrypt'
             - 'kms:GenerateDataKey*'
