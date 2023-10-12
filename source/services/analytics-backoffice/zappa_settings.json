@@ -5,7 +5,7 @@
         "s3_bucket": "zappa-bucket-%%AWS_REGION%%",
         "environment_variables": {
             "GEODE_ENVIRONMENT": "%%ENVIRONMENT%%",
-            "PROJECT_NAME": "%%PROJECT_NAME%%-backoffice"
+            "PROJECT_NAME": "%%PROJECT_NAME%%"
         },
         "profile_name": "%%PROFILE_NAME%%",
         "project_name": "%%PROJECT_NAME%%-backoffice",

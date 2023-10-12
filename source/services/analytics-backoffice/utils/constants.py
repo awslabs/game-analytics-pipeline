@@ -6,8 +6,6 @@ import os
 
 __table_prefix = f"{os.environ['PROJECT_NAME']}-{os.environ['GEODE_ENVIRONMENT']}"
 
-MAX_ACTIVATED_ABTESTS = 4
-
 TABLE_ABTESTS = f"{__table_prefix}-abtests"
 TABLE_ABTESTS_HISTORY = f"{__table_prefix}-abtests-history"
 TABLE_REMOTE_CONFIGS = f"{__table_prefix}-remote-configs"

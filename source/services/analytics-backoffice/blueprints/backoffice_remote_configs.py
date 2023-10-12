@@ -31,12 +31,11 @@ def create_remote_config():
     """
     database: DynamoDBServiceResource = current_app.config["database"]
     payload = request.get_json(force=True)
-    application_ID = payload.pop("application_ID", None)
 
     remote_config_ID = str(uuid4())
     try:
         remote_config = RemoteConfig.from_dict(database, remote_config_ID, payload)
-        remote_config.create(application_ID)
+        remote_config.create()
     except AssertionError as e:
         return jsonify(error=str(e)), 400
 
@@ -195,8 +194,6 @@ def activate_abtest(abtest_ID: str):
             jsonify(error="There is already an active abtest on this remote config"),
             400,
         )
-    if remote_config.max_active_abtests(active_abtests):
-        return jsonify(error="The maximum number of ABTest has been reached"), 400
 
     try:
         remote_config.activate_abtest(abtest_ID, payload.get("start_timestamp"))

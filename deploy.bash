@@ -21,7 +21,6 @@ done
 
 echo "Game Analytics Pipeline will deployed in $PROJECT_ENVIRONMENT project !\n"
 
-export AWS_PROFILE=dev
 PARAMETER_OVERRIDES=""
 if [ $BRANCH_NAME = "master" ]; then
     export AWS_PROFILE=prod
@@ -29,10 +28,12 @@ if [ $BRANCH_NAME = "master" ]; then
     ENVIRONMENT="prod"
     PARAMETER_OVERRIDES="--parameter-overrides KinesisStreamShards=5 SolutionMode=Prod"
 elif [ $BRANCH_NAME = "dev" ]; then
+    export AWS_PROFILE=dev
     AWS_REGION="eu-west-3"
     ENVIRONMENT="dev"
 else
-    AWS_REGION="eu-west-3"
+    export AWS_PROFILE=sandbox
+    AWS_REGION="eu-central-1"
     ENVIRONMENT="sandbox"
 fi
 
@@ -45,7 +46,7 @@ DIST_OUTPUT_BUCKET="$PROJECT_NAME-output-bucket"
 STACK_NAME="$PROJECT_NAME-$ENVIRONMENT"
 
 # Run following command only the first time to create output bucket.
-aws s3 mb s3://$DIST_OUTPUT_BUCKET-$AWS_REGION --region $AWS_REGION
+aws s3 mb s3://$DIST_OUTPUT_BUCKET-$AWS_REGION --region $AWS_REGION 2> /dev/null
 
 cd ./deployment
 
@@ -58,8 +59,8 @@ aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENV
 # Store Regional Assets to S3 (Lambdas)
 aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
-# # Deploy Backoffce Remote Config API Gateway (Zappa)
-# ./deploy-analytics-backoffice.sh $ENVIRONMENT $AWS_REGION $PROJECT_NAME
+# Deploy Backoffce Remote Config API Gateway (Zappa)
+./deploy-analytics-backoffice.sh $ENVIRONMENT $AWS_REGION $PROJECT_NAME
 
 # Deploy CloudFormation by creating/updating Stack
 aws cloudformation deploy \
