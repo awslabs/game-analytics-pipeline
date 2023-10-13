@@ -27,19 +27,26 @@ if [ $BRANCH_NAME = "master" ]; then
     AWS_REGION="us-east-1"
     ENVIRONMENT="prod"
     PARAMETER_OVERRIDES="--parameter-overrides KinesisStreamShards=5 SolutionMode=Prod"
+    if $IS_CHINA; then
+        export AWS_PROFILE=prod-china
+        AWS_REGION="cn-north-1"
+    fi
 elif [ $BRANCH_NAME = "dev" ]; then
     export AWS_PROFILE=dev
     AWS_REGION="eu-west-3"
     ENVIRONMENT="dev"
+    if $IS_CHINA; then
+        export AWS_PROFILE=dev-china
+        AWS_REGION="cn-northwest-1"
+    fi
 else
     export AWS_PROFILE=sandbox
-    AWS_REGION="eu-central-1"
+    AWS_REGION="eu-west-2"
     ENVIRONMENT="sandbox"
-fi
-
-if $IS_CHINA; then
-    export AWS_PROFILE=$AWS_PROFILE-china
-    AWS_REGION="cn-north-1" # The region is the same in dev and prod environment
+    if $IS_CHINA; then
+        export AWS_PROFILE=sandbox-china
+        AWS_REGION="cn-northwest-1"
+    fi
 fi
 
 DIST_OUTPUT_BUCKET="$PROJECT_NAME-output-bucket"
