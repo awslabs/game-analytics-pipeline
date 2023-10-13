@@ -1,5 +1,5 @@
 """
-This module contains main endpoints.
+This module contains main endpoints of analytics backoffice API.
 """
 import contextlib
 from decimal import Decimal
@@ -9,7 +9,6 @@ from flask import Flask, jsonify
 from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 
-from blueprints.backoffice_remote_configs import backoffice_remote_configs_endpoints
 from blueprints.remote_configs import remote_configs_endpoints
 
 
@@ -36,9 +35,8 @@ app.json_provider_class = FlaskAppEncoder
 app.json = FlaskAppEncoder(app)
 CORS(app)
 
-app.register_blueprint(
-    backoffice_remote_configs_endpoints, url_prefix="/backoffice/remote-configs"
-)
+# TODO link with custom domain with analytics-backoffice
+
 app.register_blueprint(remote_configs_endpoints, url_prefix="/remote-configs")
 
 app.config["database"] = boto3.resource("dynamodb")

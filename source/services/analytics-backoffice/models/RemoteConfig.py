@@ -1,14 +1,12 @@
 """
 This module contains RemoteConfig class.
 """
-from collections import defaultdict
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
 from models.ABTest import ABTest
-from models.UserABTest import UserABTest
 from utils import constants
 
 
@@ -60,33 +58,7 @@ class RemoteConfig:
             Key={"ID": remote_config_ID}
         )
         if item := response.get("Item"):
-            return cls(database, item.pop("ID"), item)
-
-    @staticmethod
-    def get_all_from_uid(
-        database: DynamoDBServiceResource, uid: str
-    ) -> dict[str, dict[str, str]]:
-        """
-        This method returns a list of all remote configs from an uid.
-        If a remote config has an active ABTest, we retrieve his group, or set the user to a group if it has none.
-        """
-        response = database.Table(constants.TABLE_REMOTE_CONFIGS).query(
-            IndexName="active-index",
-            KeyConditionExpression=Key("active").eq(1)
-        )
-
-        remote_configs = {}
-        for remote_config_data in response["Items"]:
-            remote_config = RemoteConfig(
-                database, remote_config_data.pop("ID"), remote_config_data
-            )
-            abtest = ABTest.active_from_remote_config_id(
-                database, remote_config.id)
-            user_remote_config = remote_config.to_user_remote_config(
-                uid, abtest)
-            remote_configs[user_remote_config.pop("name")] = user_remote_config
-
-        return remote_configs
+            return cls(database, item.pop("ID"), item)  # type: ignore
 
     @property
     def active(self) -> bool:
@@ -125,7 +97,7 @@ class RemoteConfig:
             AttributeUpdates={"active": {"Value": 1, "Action": "PUT"}},
         )
 
-    def activate_abtest(self, abtest_ID: str, start_timestamp: str | None = None):
+    def activate_abtest(self, abtest_ID: str, start_timestamp: int | None = None):
         """
         This method activates ABTest in database.
         It raises AssertionError if start_timestamp is less than the current timestamp.
@@ -139,13 +111,10 @@ class RemoteConfig:
         """
         # Check if there is already a remote config with the same name
         if self.__name_exists(self.name):
-            raise AssertionError(
-                f"There is already a remote config named {self.name}"
-            )
+            raise AssertionError(f"There is already a remote config named {self.name}")
 
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS).put_item(
-            Item=self.__data
-            | {"ID": self.__remote_config_ID, "active": 0}
+            Item=self.__data | {"ID": self.__remote_config_ID, "active": 0}
         )
 
     def create_abtest(self, abtest_ID: str, abtest_data: dict[str, Any]):
@@ -205,8 +174,7 @@ class RemoteConfig:
             raise AssertionError("You can't promote a deactivated ABTest")
 
         if promoted_value not in [self.reference_value] + abtest.variants:
-            raise AssertionError(
-                f"{promoted_value} value not in ABTest {abtest_ID}")
+            raise AssertionError(f"{promoted_value} value not in ABTest {abtest_ID}")
 
         # Update reference value of remote config
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS).update_item(
@@ -219,33 +187,6 @@ class RemoteConfig:
         abtest.save_history(self.name, self.reference_value, promoted_value)
         abtest.purge()
         abtest.delete()
-
-    def to_user_remote_config(self, uid: str, abtest: ABTest | None = None) -> dict[str, str]:
-        """
-        This method returns a dict that represents the remote config with user specifications.
-        It assigns user to a group of the ABTest if he has not been assigned.
-        """
-        value_origin = "reference_value"
-        value = self.reference_value
-
-        if abtest:
-            # There is an active ABTest
-            user_abtest = UserABTest(self.__database, uid, abtest.id)
-            if not user_abtest.has_group:
-                # We set user to a group
-                user_abtest.set_group(
-                    abtest.target_user_percent,
-                    self.__data["reference_value"],
-                    abtest.variants,
-                )
-            value_origin = "abtest" if user_abtest.is_in_test else "reference_value"
-            value = user_abtest.value
-
-        return {
-            "name": self.name,
-            "value_origin": value_origin,
-            "value": value,
-        }
 
     def update(self, new_data: dict[str, Any]):
         """

@@ -3,9 +3,9 @@ This module contains ABTest class.
 """
 from decimal import Decimal
 from time import time
-from typing import Any, List, Optional
+from typing import Any, List
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
 from utils import constants
@@ -50,23 +50,7 @@ class ABTest:
             Key={"ID": abtest_ID}
         )
         if item := response.get("Item"):
-            return cls(database, item.pop("ID"), item)
-
-    @staticmethod
-    def active_from_remote_config_id(
-        database: DynamoDBServiceResource, remote_config_ID: str
-    ) -> Optional["ABTest"]:
-        """
-        This method returns the active ABTest assigned to remote_config_ID
-        """
-        response = database.Table(constants.TABLE_ABTESTS).query(
-            IndexName="active-index",
-            KeyConditionExpression=Key("active").eq(1),
-            FilterExpression=Attr("remote_config_ID").eq(remote_config_ID)
-            & Attr("paused").eq(False),
-        )
-        if abtest := next(iter(response["Items"]), None):
-            return ABTest(database, abtest.pop("ID"), abtest)
+            return cls(database, item.pop("ID"), item)  # type: ignore
 
     @staticmethod
     def get_actives(database: DynamoDBServiceResource) -> List["ABTest"]:
@@ -76,7 +60,7 @@ class ABTest:
         response = database.Table(constants.TABLE_ABTESTS).query(
             IndexName="active-index", KeyConditionExpression=Key("active").eq(1)
         )
-        return [ABTest(database, item.pop("ID"), item) for item in response["Items"]]
+        return [ABTest(database, item.pop("ID"), item) for item in response["Items"]]  # type: ignore
 
     @property
     def active(self) -> bool:
@@ -141,7 +125,7 @@ class ABTest:
         """
         return self.__data["variants"]
 
-    def activate(self, start_timestamp: str | None = None):
+    def activate(self, start_timestamp: int | None = None):
         """
         This method activates ABTest in database.
         It raises AssertionError if start_timestamp is less than the current timestamp.
