@@ -22,13 +22,7 @@ confidence=HIGH,
 # --disable=W".
 disable=global-statement,
 		invalid-name, # snake_case so if name is 'error', not authorized... '_' should be in variable.
-		logging-fstring-interpolation,
-		no-member, # pylint not found constants...
-		no-name-in-module, # pylint not found functions...
 		redefined-outer-name,
-		unexpected-keyword-arg,
-		ungrouped-imports, # We need to call dotenv() function before some imports
-		wrong-import-position, # We need to call dotenv() function before some imports
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

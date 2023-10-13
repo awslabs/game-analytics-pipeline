@@ -58,7 +58,7 @@ class RemoteConfig:
             Key={"ID": remote_config_ID}
         )
         if item := response.get("Item"):
-            return cls(database, item.pop("ID"), item)  # type: ignore
+            return cls(database, item.pop("ID"), item)
 
     @property
     def active(self) -> bool:

@@ -9,6 +9,7 @@ from flask import Flask, jsonify
 from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 
+from blueprints.applications import applications_endpoints
 from blueprints.remote_configs import remote_configs_endpoints
 
 
@@ -37,10 +38,11 @@ CORS(app)
 
 # TODO link with custom domain with analytics-backoffice
 
+app.register_blueprint(applications_endpoints, url_prefix="/applications")
 app.register_blueprint(remote_configs_endpoints, url_prefix="/remote-configs")
 
+app.config["athena"] = boto3.client("athena")
 app.config["database"] = boto3.resource("dynamodb")
-app.config["secrets_manager"] = boto3.client("secretsmanager")
 
 
 @app.get("/")

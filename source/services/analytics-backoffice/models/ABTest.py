@@ -50,7 +50,7 @@ class ABTest:
             Key={"ID": abtest_ID}
         )
         if item := response.get("Item"):
-            return cls(database, item.pop("ID"), item)  # type: ignore
+            return cls(database, item.pop("ID"), item)
 
     @staticmethod
     def get_actives(database: DynamoDBServiceResource) -> List["ABTest"]:
@@ -60,7 +60,7 @@ class ABTest:
         response = database.Table(constants.TABLE_ABTESTS).query(
             IndexName="active-index", KeyConditionExpression=Key("active").eq(1)
         )
-        return [ABTest(database, item.pop("ID"), item) for item in response["Items"]]  # type: ignore
+        return [ABTest(database, item.pop("ID"), item) for item in response["Items"]]
 
     @property
     def active(self) -> bool:
