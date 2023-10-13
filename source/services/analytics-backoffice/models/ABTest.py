@@ -239,11 +239,7 @@ class ABTest:
                 )
 
     def save_history(
-        self,
-        application_ID: str,
-        remote_config_name: str,
-        reference_value: str,
-        promoted_value: str,
+        self, remote_config_name: str, reference_value: str, promoted_value: str
     ):
         """
         This method saves ABTest in history.
@@ -258,7 +254,6 @@ class ABTest:
             Item={
                 "abtest_ID": self.__abtest_ID,
                 "abtest_name": self.name,
-                "application_ID": application_ID,
                 "end_timestamp": now,
                 "pauses": pauses,
                 "promoted_value": promoted_value,

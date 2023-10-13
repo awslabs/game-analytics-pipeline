@@ -4,11 +4,12 @@
         "aws_region": "%%AWS_REGION%%",
         "s3_bucket": "zappa-bucket-%%AWS_REGION%%",
         "environment_variables": {
-            "GEODE_ENVIRONMENT": "%%ENVIRONMENT%%"
+            "GEODE_ENVIRONMENT": "%%ENVIRONMENT%%",
+            "PROJECT_NAME": "%%PROJECT_NAME%%"
         },
         "profile_name": "%%PROFILE_NAME%%",
-        "project_name": "remote-config",
-        "role_name": "remote-config-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
+        "project_name": "%%PROJECT_NAME%%-backoffice",
+        "role_name": "%%PROJECT_NAME%%-backoffice-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
         "runtime": "python3.10"
     }
 }

@@ -1,4 +1,5 @@
-VERSION="v4"
+PROJECT_NAME="geode-analytics"
+VERSION="v1"
 
 if [ -z $BRANCH_NAME ]; then
     # Jenkins runs script on git branch in a detached HEAD state.
@@ -20,31 +21,39 @@ done
 
 echo "Game Analytics Pipeline will deployed in $PROJECT_ENVIRONMENT project !\n"
 
-export AWS_PROFILE=dev
 PARAMETER_OVERRIDES=""
 if [ $BRANCH_NAME = "master" ]; then
     export AWS_PROFILE=prod
     AWS_REGION="us-east-1"
     ENVIRONMENT="prod"
     PARAMETER_OVERRIDES="--parameter-overrides KinesisStreamShards=5 SolutionMode=Prod"
+    if $IS_CHINA; then
+        export AWS_PROFILE=prod-china
+        AWS_REGION="cn-north-1"
+    fi
 elif [ $BRANCH_NAME = "dev" ]; then
+    export AWS_PROFILE=dev
     AWS_REGION="eu-west-3"
     ENVIRONMENT="dev"
+    if $IS_CHINA; then
+        export AWS_PROFILE=dev-china
+        AWS_REGION="cn-northwest-1"
+    fi
 else
-    AWS_REGION="eu-west-3"
+    export AWS_PROFILE=sandbox
+    AWS_REGION="eu-west-2"
     ENVIRONMENT="sandbox"
+    if $IS_CHINA; then
+        export AWS_PROFILE=sandbox-china
+        AWS_REGION="cn-northwest-1"
+    fi
 fi
 
-if $IS_CHINA; then
-    export AWS_PROFILE=$AWS_PROFILE-china
-    AWS_REGION="cn-north-1" # The region is the same in dev and prod environment
-fi
+DIST_OUTPUT_BUCKET="$PROJECT_NAME-output-bucket"
+STACK_NAME="$PROJECT_NAME-$ENVIRONMENT"
 
-DIST_OUTPUT_BUCKET="analytics-output-bucket"
-STACK_NAME="analytics-$ENVIRONMENT"
-
-# Run following commands only the first time to create bucket.
-# aws s3 mb s3://$DIST_OUTPUT_BUCKET --region $AWS_REGION
+# Run following command only the first time to create output bucket.
+aws s3 mb s3://$DIST_OUTPUT_BUCKET-$AWS_REGION --region $AWS_REGION 2> /dev/null
 
 cd ./deployment
 
@@ -58,7 +67,7 @@ aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENV
 aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
 # Deploy Backoffce Remote Config API Gateway (Zappa)
-# ./deploy-remote-config.sh $ENVIRONMENT $AWS_REGION
+./deploy-analytics-backoffice.sh $ENVIRONMENT $AWS_REGION $PROJECT_NAME
 
 # Deploy CloudFormation by creating/updating Stack
 aws cloudformation deploy \
@@ -67,4 +76,5 @@ aws cloudformation deploy \
     --capabilities CAPABILITY_IAM \
     --s3-bucket $DIST_OUTPUT_BUCKET-$AWS_REGION \
     --s3-prefix templates \
+    --capabilities CAPABILITY_NAMED_IAM \
     $PARAMETER_OVERRIDES

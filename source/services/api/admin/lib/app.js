@@ -247,14 +247,6 @@ const getAuthorizationDetail = async (req, res) => {
   }
 };
 
-// Get remote configs for a user for an application
-const getRemoteConfigs = async (req, res) => {
-  console.log(`Attempting to retrieve remote configs.`);
-  const {applicationId, userId} = req.params;
-  const _application = new Application();
-  res.json(await _application.getRemoteConfigsFromUserID(applicationId, userId));
-};
-
 /****************************
  * Event methods *
 ****************************/
@@ -273,8 +265,6 @@ router.put('/applications/:applicationId/authorizations/:apiKeyId', modifyAuthor
 router.delete('/applications/:applicationId/authorizations', deleteAuthorization);
 router.delete('/applications/:applicationId/authorizations/:apiKeyId', deleteAuthorization);
 //router.put('/registrations/:registration_name', updateRegistration);
-
-router.get('/applications/:applicationId/remote-configs/:userId', getRemoteConfigs);
 
 app.use('/', router);
 
