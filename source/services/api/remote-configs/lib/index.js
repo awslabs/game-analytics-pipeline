@@ -51,7 +51,7 @@ const respond = async (event, context) => {
         },
       }
       abtestsResult = await docClient.query(abtestsParams).promise()
-      global.abtestsCache.set(remoteConfig.ID, remoteConfigsResult);
+      global.abtestsCache.set(remoteConfig.ID, abtestsResult);
     }
     const [abtest = undefined] = abtestsResult.Items;
 
