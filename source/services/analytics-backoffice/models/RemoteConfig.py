@@ -241,9 +241,6 @@ class RemoteConfig:
             raise AssertionError(f"Unexpected fields : {list(copy_data)}")
 
     def __name_exists(self, name: str, to_exclude: str = "") -> bool:
-        print("-----debug------")
-        print(constants.TABLE_REMOTE_CONFIGS)
-        print("-----end debug------")
         response = self.__database.Table(constants.TABLE_REMOTE_CONFIGS).query(
             IndexName="name-index",
             KeyConditionExpression=Key("name").eq(name),
