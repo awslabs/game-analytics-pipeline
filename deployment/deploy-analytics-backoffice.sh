@@ -20,7 +20,7 @@ echo "Build Analytics Backoffice project"
 echo "------------------------------------------------------------------------------"
 
 cd $analytics_backoffice_dist_dir
-python3 -m venv .venv
+python3 -m venv .venv --upgrade-deps
 source .venv/bin/activate
 pip install -r requirements.txt >/dev/null
 zappa deploy
