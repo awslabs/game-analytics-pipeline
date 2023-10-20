@@ -162,6 +162,7 @@ Resources:
       Environment:
         Variables:
           APPLICATIONS_TABLE: !Ref ApplicationsTable
+          EXCHANGE_RATES_TABLE: 'exchange-rates'
           IDEMPOTENCY_TABLE: !Ref IdempotencyTable
           CACHE_TIMEOUT_SECONDS: 60
       Policies:
@@ -188,6 +189,7 @@ Resources:
             Resource:
               - !GetAtt ApplicationsTable.Arn
               - !GetAtt IdempotencyTable.Arn
+              - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/exchange-rates'
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -1973,7 +1975,6 @@ Resources:
                             ""aws_ga_api_requestId"": ""$context.requestId"",
                             ""aws_ga_api_requestTimeEpoch"": $context.requestTimeEpoch,
                             ""application_id"": ""$util.escapeJavaScript($input.params().path.get('applicationId'))"",
-                            ""ip_adress"": ""$context.identity.sourceIp"",
                             ""country"": ""$input.params('CloudFront-Viewer-Country')""
                           }" )
                           {
