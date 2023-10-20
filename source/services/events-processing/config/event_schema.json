@@ -16,13 +16,9 @@
 		"country": {
 			"type": "string",
 			"description": "Country code of user"
-		},
-		"ip_adress": {
-			"type": "string",
-			"description": "IP adress of user"
 		}
 	},
-	"required": ["event", "application_id", "ip_adress"],
+	"required": ["event", "application_id"],
 	"definitions": {
 		"event": {
 			"type": "object",

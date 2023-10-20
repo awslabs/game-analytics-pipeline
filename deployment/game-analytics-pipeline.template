@@ -1973,7 +1973,6 @@ Resources:
                             ""aws_ga_api_requestId"": ""$context.requestId"",
                             ""aws_ga_api_requestTimeEpoch"": $context.requestTimeEpoch,
                             ""application_id"": ""$util.escapeJavaScript($input.params().path.get('applicationId'))"",
-                            ""ip_adress"": ""$context.identity.sourceIp"",
                             ""country"": ""$input.params('CloudFront-Viewer-Country')""
                           }" )
                           {

@@ -69,7 +69,6 @@ class Event {
       const applicationId = input.application_id;
       const country = input.country;
       const event = input.event;
-      const ip_adress = input.ip_adress;
       
       // Add a processing timestamp and the Lambda Request Id to the event metadata
       let metadata = {
@@ -142,7 +141,6 @@ class Event {
         }
         if(event.hasOwnProperty('user')){
           transformed_event.user = event.user;
-          transformed_event.user.ip_adress = String(ip_adress)
           transformed_event.user.country = String(country)
         }
         if(event.hasOwnProperty('device')){
@@ -200,7 +198,6 @@ class Event {
         }
         if(event.hasOwnProperty('user')){
           unregistered_format.user = event.user;
-          unregistered_format.user.ip_adress = String(ip_adress)
           unregistered_format.user.country = String(country)
         }
         if(event.hasOwnProperty('device')){
