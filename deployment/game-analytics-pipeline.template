@@ -225,7 +225,7 @@ Resources:
         Variables:
           ABTESTS_TABLE: !Ref ABTestsTable
           REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
-          REMOTE_CONFIGS__CONDITIONS_TABLE: !Ref RemoteConfigsConditionsTable
+          REMOTE_CONFIGS_CONDITIONS_TABLE: !Ref RemoteConfigsConditionsTable
           USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
           CACHE_TIMEOUT_SECONDS: 60
       Policies:

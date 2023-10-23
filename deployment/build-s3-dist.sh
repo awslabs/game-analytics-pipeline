@@ -90,13 +90,9 @@ cp dist/admin.zip $build_dist_dir/admin.zip
 echo "------------------------------------------------------------------------------"  
 echo "Packaging Lambda Function - Remote Configs service"  
 echo "------------------------------------------------------------------------------"  
-# cd $source_dir/services/api/remote-configs
-# npm run build
-# cp dist/remote-configs.zip $build_dist_dir/remote-configs.zip
-
 cd $source_dir/services/api/remote-configs
 rm -r dist 2>/dev/null
-rsync -av --exclude=.venv/ --exclude=dist/ * dist >/dev/null
+rsync -av --exclude=.venv/ --exclude=dist/ --exclude=.pylintrc * dist >/dev/null
 cd dist
 python3 -m venv .venv --upgrade-deps
 source .venv/bin/activate

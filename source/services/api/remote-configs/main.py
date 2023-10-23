@@ -3,15 +3,21 @@ Lambda handler
 """
 import os
 import random
+from typing import Any
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
+
+from RemoteConfigConditions import RemoteConfigConditions
 
 
 dynamodb = boto3.resource("dynamodb")
 
 abtests_table = dynamodb.Table(os.environ["ABTESTS_TABLE"])
 remote_configs_table = dynamodb.Table(os.environ["REMOTE_CONFIGS_TABLE"])
+remote_configs_conditions_table = dynamodb.Table(
+    os.environ["REMOTE_CONFIGS_CONDITIONS_TABLE"]
+)
 users_abtests_table = dynamodb.Table(os.environ["USERS_ABTESTS_TABLE"])
 
 
@@ -23,31 +29,30 @@ def handler(event: dict, context: dict):
     print(f"Event: {event}")
     print(f"Context: {context}")
 
-    user_id = event["userId"]
+    user_ID = event["userId"]
+    user_data = {"country": event["country"]}
+
     remote_configs = {}
 
-    remote_configs_result = remote_configs_table.query(
-        IndexName="active-index",
-        KeyConditionExpression=Key("active").eq(1),
-    )
+    for remote_config in __get_active_remote_configs():
+        remote_config_ID = remote_config["ID"]
+        if not __conditions_match(remote_config_ID, user_data):
+            continue
 
-    for remote_config in remote_configs_result.get("Items", []):
         value = remote_config["reference_value"]
         value_origin = "reference_value"
 
-        abtests_result = abtests_table.query(
-            IndexName="active-index",
-            KeyConditionExpression=Key("active").eq(1),
-            FilterExpression=Attr("remote_config_ID").eq(remote_config["ID"])
-            & Attr("paused").eq(False),
-        )
+        if abtest := __get_active_abtest(remote_config_ID):
 
-        if abtest := next(iter(abtests_result.get("Items", [])), None):
-            users_abtests_result = users_abtests_table.get_item(
-                Key={"uid": user_id, "abtest_ID": abtest.get("ID")}
-            )
+            if user_abtest := __get_user_abtest(user_ID, abtest["ID"]):
+                value = user_abtest["value"]
+                value_origin = (
+                    "abtest"
+                    if user_abtest["is_in_test"]
+                    else "reference_value"
+                )
 
-            if "Item" not in users_abtests_result:
+            else:
                 is_in_test = random.randint(0, 99) < abtest.get("target_user_percent")
                 value_origin = "abtest" if is_in_test else "reference_value"
 
@@ -59,18 +64,11 @@ def handler(event: dict, context: dict):
 
                 users_abtests_table.put_item(
                     Item={
-                        "uid": user_id,
+                        "uid": user_ID,
                         "abtest_ID": abtest.get("ID"),
                         "is_in_test": is_in_test,
                         "value": value,
                     }
-                )
-            else:
-                value = users_abtests_result["Item"]["value"]
-                value_origin = (
-                    "abtest"
-                    if users_abtests_result["Item"]["is_in_test"]
-                    else "reference_value"
                 )
 
         remote_configs[remote_config["name"]] = {
@@ -79,3 +77,34 @@ def handler(event: dict, context: dict):
         }
 
     return remote_configs
+
+def __conditions_match(remote_config_ID: str, condition_data: dict[str, Any]) -> bool:
+    remote_config_conditions = RemoteConfigConditions(
+        dynamodb, remote_config_ID, condition_data
+    )
+    if not remote_config_conditions.country_available:
+        return False
+
+    return True
+
+def __get_active_abtest(remote_config_ID: str):
+    response = abtests_table.query(
+        IndexName="active-index",
+        KeyConditionExpression=Key("active").eq(1),
+        FilterExpression=Attr("remote_config_ID").eq(remote_config_ID)
+        & Attr("paused").eq(False),
+    )
+    return next(iter(response["Items"]), None)
+
+def __get_active_remote_configs():
+    response = remote_configs_table.query(
+        IndexName="active-index",
+        KeyConditionExpression=Key("active").eq(1),
+    )
+    return response["Items"]
+
+def __get_user_abtest(user_ID: str, abtest_ID: str):
+    response = users_abtests_table.get_item(
+        Key={"uid": user_ID, "abtest_ID": abtest_ID}
+    )
+    return response.get("Item")
