@@ -13,3 +13,4 @@
 **/__pycache__
 **/.lambda_package
 **/package-lock.json
+**.venv

@@ -213,9 +213,9 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${AWS::StackName}-RemoteConfigsFunction'
-      Handler: index.handler
+      Handler: main.handler
       Description: 'Function to process to fetch remote configs for a user'
-      Runtime: nodejs14.x
+      Runtime: python3.11
       CodeUri: 
         Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
         Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "remote-configs.zip"]]
@@ -225,6 +225,7 @@ Resources:
         Variables:
           ABTESTS_TABLE: !Ref ABTestsTable
           REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
+          REMOTE_CONFIGS__CONDITIONS_TABLE: !Ref RemoteConfigsConditionsTable
           USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
           CACHE_TIMEOUT_SECONDS: 60
       Policies:
@@ -1371,6 +1372,28 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: KEYS_ONLY
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
+  RemoteConfigsConditionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-remote-configs-conditions'
+      AttributeDefinitions:
+        - AttributeName: remote_config_ID
+          AttributeType: S
+        - AttributeName: condition_type
+          AttributeType: S
+      KeySchema:
+        - AttributeName: remote_config_ID
+          KeyType: HASH
+        - AttributeName: condition_type
+          KeyType: RANGE
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
