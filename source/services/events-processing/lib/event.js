@@ -319,7 +319,7 @@ class Event {
     const params = {
       TableName: process.env.EXCHANGE_RATES_TABLE,
       Key: {
-        currency: currency.toLowerCase()
+        currency: currency.toUpperCase()
       }
     };
     
