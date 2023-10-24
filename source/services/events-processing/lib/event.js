@@ -153,7 +153,7 @@ class Event {
           transformed_event.event_data = event.event_data;
           if(event.event_data.hasOwnProperty('currency') && event.event_data.hasOwnProperty('revenues')){
             let rate = await _self.getExchangeRate(event.event_data.currency)
-            transformed_event.event_data.revenues_usd = event_data.revenues / rate
+            transformed_event.event_data.revenues_usd = event.event_data.revenues / rate
           }
         }
         
@@ -201,7 +201,7 @@ class Event {
           unregistered_format.event_data = event.event_data;
           if(event.event_data.hasOwnProperty('currency') && event.event_data.hasOwnProperty('revenues')){
             let rate = await _self.getExchangeRate(event.event_data.currency)
-            unregistered_format.event_data.revenues_usd = event_data.revenues / rate
+            unregistered_format.event_data.revenues_usd = event.event_data.revenues / rate
           }
         }
         if(event.hasOwnProperty('user')){
