@@ -1,6 +1,7 @@
 """
 This module contains RemoteConfig class.
 """
+from decimal import Decimal
 from typing import Any
 
 from boto3.dynamodb.conditions import Key
@@ -234,6 +235,9 @@ class RemoteConfig:
         """
         if condition_type not in constants.ALLOWED_REMOTE_CONFIGS_CONDITIONS:
             raise AssertionError(f"condition_type {condition_type} not allowed")
+
+        if isinstance(condition_value, (float, int)):
+            condition_value = Decimal(condition_value)
 
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS_CONDITIONS).put_item(
             Item={
