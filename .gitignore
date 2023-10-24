@@ -9,6 +9,7 @@
 **/open-source
 **/.zip
 **/.DS_Store
+**/.venv
 **/.vscode
 **/__pycache__
 **/.lambda_package

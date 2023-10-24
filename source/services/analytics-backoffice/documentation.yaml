@@ -1,116 +1,162 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
   version: 1.0.0
-  title: AWS Remote Config
+  title: GEODE REST API - Analytics Backoffice
   description: |-
-    - **[Development URL](https://4nubytbnil.execute-api.cn-north-1.amazonaws.com.cn/dev)**
+    - **[Development URL](https://apidev.geode.com/analytics-backoffice)**
+    - **[Production URL](https://api.geode.com/analytics-backoffice)**
 
 servers:
-- url: https://4nubytbnil.execute-api.cn-north-1.amazonaws.com.cn/dev
+- url: https://apidev.geode.com/analytics-backoffice/
 tags:
-- name: Remote Config
-  description: Endpoints called by our client applications to handle remote config
-- name: Backoffice Remote Config
-  description: Endpoints called by our backoffice to handle remote config
+- name: Applications
+  description: Handle GEODE Analytics Applications
+- name: Remote Configs
+  description: Handle Remote Configs and ABTests
 
 paths:
 
-  #  ----- Remote Config  --------------------------------------------------
+  #  ----- Applications ----------------------------------
 
-  /remote-configs/{user_ID}:
+  /applications:
     get:
-      summary: Retrieve all remote configs for a user
-      description: This endpoint will also place the user in a group for each ABTest for which he does not have a group assigned.
+      summary: Get Applications
+      description: This endpoint returns GEODE analytics applications.
       tags:
-      - Remote Config
+      - Applications
+      responses:
+        200:
+          description: Applications returned successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    application_ID:
+                      type: string
+                      example: android.com.geode.dazzly.dev
+                    application_name:
+                      type: string
+                      example: dazzly_android_dev
+                    created_at:
+                      type: string
+                      example: 2023-09-21T14:56:06Z
+                    description:
+                      type: string
+                      example: Dazzly Android DEV
+                    updated_at:
+                      type: string
+                      example: 2023-09-21T14:56:06Z
+
+  /applications/{application_ID}/events:
+    get:
+      summary: Get latest events from application_ID
+      description: This endpoint returns latest events from application_ID.
+      tags:
+      - Applications
       parameters:
-      - name: user_ID
+      - name: application_ID
         in: path
-        description: ID of the user
+        description: ID of the GEODE analytics application
         required: true
         schema:
           type: string
-          example: 1234
+          example: android.com.geode.dazzly.dev
+      - name: limit
+        in: query
+        description: Number of desired events. It should be integer and greater than 0. Its default value is **50**.
+        required: true
+        schema:
+          type: number
+          example: 50
       responses:
-        '200':
-          description:
+        200:
+          description: Applications returned successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  remote_configs:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                          example: ButtonColor
-                        value_origin:
-                          type: string
-                          enum:
-                          - reference_value
-                          - abtest
-                        value:
-                          type: string
-                          example: Blue
-
-  #  ----- Backoffice Remote Config ----------------------------------
-
-  /backoffice/remote-configs:
-    get:
-      summary: Retrieve all remote configs
-      description: This endpoint returns all Remote Configs
-      tags:
-      - Backoffice Remote Config
-      responses:
-        '200':
-          description:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    app_info:
+                      type: string
+                      example: "{\"app_version\":\"1.1.48\",\"build_number\":\"7203\",\"unity_version\":\"2021.3.31f1\"}"
+                    application_name:
+                      type: string
+                      example: dazzly_android_dev
+                    day:
+                      type: string
+                      example: 16
+                    device:
+                      type: string
+                      example: "{\"advertising_id\":\"11a2a8d9-d809-4b3d-ab1d-e91270898f4d\",\"battery_load\":0.2,\"battery_status\":\"Discharging\",\"category\":\"mobile\",\"is_limiting_ad_tracking\":false,\"language\":\"en\",\"model_name\":\"Google Pixel 5\",\"os_version\":\"Android OS 13 / API-33 (TQ3A.230901.001/10750268)\",\"platform\":\"android\"}"
+                    event_data:
+                      type: string
+                      example: "{\"ad_format\":\"rewarded\",\"geode_ad_geode_id\":\"Match_September_01_Portrait_30s\"}"
+                    event_id:
+                      type: string
+                      example: ff95d64b-f86d-47d5-868c-9d844ff3530a
+                    event_name:
+                      type: string
+                      example: geode_will_display_geode_ad
+                    event_timestamp:
+                      type: string
+                      example: 1697449531
+                    event_type:
+                      type: string
+                      example: custom
+                    event_version:
+                      type: string
+                      example: v1
+                    game_time:
+                      type: string
+                      example: 2095
+                    metadata:
+                      type: string
+                      example: "{\"api\":{\"request_id\":\"1798aef6-8e26-4d51-beee-8c237efcc834\",\"request_time_epoch\":1697449546113},\"ingestion_id\":\"b366eaf9-d314-410e-b3ed-72f3df121bcd\",\"processing_result\":{\"status\":\"ok\"},\"processing_timestamp\":1697449607}"
+                    month:
+                      type: string
+                      example: 10
+                    remote_config:
+                      type: string
+                      example: "{\"iapPricing\":{\"value\":\"{\\\"group\\\":\\\"adsT3subT3\\\",\\\"weekly\\\":{\\\"id\\\":\\\"com.geode.dazzlymerge.dev.weekly.tier3\\\",\\\"type\\\":\\\"Subscription\\\"},\\\"monthly\\\":{\\\"id\\\":\\\"com.geode.dazzlymerge.dev.monthly.tier3\\\",\\\"type\\\":\\\"Subscription\\\"},\\\"yearly\\\":{\\\"id\\\":\\\"com.geode.dazzlymerge.dev.yearly.tier3\\\",\\\"type\\\":\\\"Subscription\\\"},\\\"noads\\\":{\\\"id\\\":\\\"com.geode.dazzlymerge.dev.noads.tier3\\\",\\\"type\\\":\\\"NonConsumable\\\"}}\",\"value_origin\":\"abtest\"},\"showDazzlyMatchBanner\":{\"value\":\"true\",\"value_origin\":\"reference_value\"},\"skipOnboarding\":{\"value\":\"noSkip\",\"value_origin\":\"abtest\"}}"
+                    user:
+                      type: string
+                      example: "{\"country\":\"FR\",\"ip_adress\":\"89.91.64.155\",\"num_total_session\":16,\"session_id\":\"11fb8911-d45e-4814-9443-786f134309fe\",\"start_first_session_date\":1695395597,\"start_session_date\":1697449447,\"user_id\":\"05e5ff99-48be-4aa9-b763-b5f3eaed3081\"}"
+                    year:
+                      type: string
+                      example: 2023
+        400:
+          description: Events canNOT be retrieved
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  remote_configs:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        activated:
-                          type: boolean
-                        application_ID:
-                          type: string
-                          example: com.geode.dazzly
-                        description:
-                          type: string
-                          example: This remote config allows to handle color button.
-                        reference_value:
-                          type: string
-                          example: "Blue"
+                $ref: '#/components/schemas/errorResponse'
 
+  #  ----- Remote Configs ----------------------------------
+
+  /remote-configs:
     post:
       summary: Create a Remote Config
       description: This endpoint creates a remote config.
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       requestBody:
         description: |-
-          - You can't create 2 remote configs with the same `name` & `application_ID`
+          - You can't create 2 remote configs with the same `name`
         required: true
         content:
           application/json:
             schema:
               required:
-              - application_ID
               - description
               - name
               - reference_value
               type: object
               properties:
-                application_ID:
-                  type: string
-                  example: com.geode.dazzly
                 description:
                   type: string
                   example: This remote config allows to handle color button.
@@ -119,9 +165,9 @@ paths:
                   example: ColorButton
                 reference_value:
                   type: string
-                  example: "Blue"
+                  example: Blue
       responses:
-        '200':
+        200:
           description: The remote config was created successfully
           content:
             application/json:
@@ -131,19 +177,19 @@ paths:
                   remote_config_ID:
                     type: string
                     example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
-        '400':
+        400:
           description: The remote config has NOT been created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorResponse'
 
-  /backoffice/remote-configs/{remote_config_ID}:
+  /remote-configs/{remote_config_ID}:
     put:
       summary: Update a Remote Config
       description: This endpoint updates a remote config.
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: remote_config_ID
         in: path
@@ -154,7 +200,7 @@ paths:
           example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
       requestBody:
         description: |-
-          - you can't use a `name` that has already been used by another remote config on the same application_ID
+          - you can't use a `name` that has already been used by another remote config
           - You can't update `name` and `reference_value` if this remote config is activated.
         required: true
         content:
@@ -174,11 +220,11 @@ paths:
                   example: ColorButton
                 reference_value:
                   type: string
-                  example: "Blue"
+                  example: Blue
       responses:
-        '204':
+        204:
           description: The remote config was updated successfully
-        '400':
+        400:
           description: The remote config has NOT been updated
           content:
             application/json:
@@ -189,7 +235,7 @@ paths:
       summary: Delete a Remote Config
       description: This endpoint deletes a remote config. You can't delete an activated remote config
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: remote_config_ID
         in: path
@@ -199,21 +245,21 @@ paths:
           type: string
           example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
       responses:
-        '204':
+        204:
           description: The remote config was deleted successfully
-        '400':
+        400:
           description: The remote config has NOT been deleted
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorResponse'
 
-  /backoffice/remote-configs/{remote_config_ID}/activate:
+  /remote-configs/{remote_config_ID}/activate:
     post:
       summary: Activate a Remote Config
       description: This endpoint activates a remote config.
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: remote_config_ID
         in: path
@@ -223,15 +269,15 @@ paths:
           type: string
           example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
       responses:
-        '204':
+        204:
           description: The remote config was activated successfully
 
-  /backoffice/remote-configs/{remote_config_ID}/abtest:
+  /remote-configs/{remote_config_ID}/abtest:
     post:
       summary: Create an ABTest
       description: This endpoint creates an ABTest for a remote config
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: remote_config_ID
         in: path
@@ -265,7 +311,7 @@ paths:
                   - Green
                   - Yellow
       responses:
-        '200':
+        200:
           description: The ABTest has been created successfully
           content:
             application/json:
@@ -275,19 +321,19 @@ paths:
                   abtest_ID:
                     type: string
                     example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
-        '400':
+        400:
           description: The remote config has NOT been created.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorResponse'
 
-  /backoffice/remote-configs/abtests/{abtest_ID}:
+  /remote-configs/abtests/{abtest_ID}:
     put:
       summary: Update an ABTest
       description: This endpoint updates an ABtest.
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: abtest_ID
         in: path
@@ -322,9 +368,9 @@ paths:
                   - Red
                   - Green
       responses:
-        '204':
+        204:
           description: The ABTest was updated successfully
-        '400':
+        400:
           description: The ABTest has NOT been updated because this ABTest is activated
           content:
             application/json:
@@ -335,7 +381,7 @@ paths:
       summary: Delete an ABTest
       description: This endpoint deletes an ABTest. You can't delete an activated ABTest
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: abtest_ID
         in: path
@@ -345,25 +391,24 @@ paths:
           type: string
           example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
       responses:
-        '204':
+        204:
           description: The ABTest was deleted successfully
-        '400':
+        400:
           description: The ABTest has NOT been deleted because the ABTest is activated.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorResponse'
 
-  /backoffice/remote-configs/abtests/{abtest_ID}/activate:
+  /remote-configs/abtests/{abtest_ID}/activate:
     post:
       summary: Activate an ABTest
       description: |-
         This endpoint activates an ABTest. You can active an ABTest only if :
         - his remote config is activate
         - there isn't another ABTest already activated on this remote config
-        - there are not already 4 ABTests activated on the application_ID link to the remote config.
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: abtest_ID
         in: path
@@ -380,29 +425,30 @@ paths:
           application/json:
             schema:
               required:
+              - start_timestamp
               type: object
               properties:
                 start_timestamp:
                   type: integer
                   example: 1692794054
       responses:
-        '204':
+        204:
           description: The ABTest was activated successfully
-        '400':
+        400:
           description: The ABTest has NOT been activated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorResponse'
 
-  /backoffice/remote-configs/abtests/{abtest_ID}/pause:
+  /remote-configs/abtests/{abtest_ID}/pause:
     post:
       summary: Pause an ABTest
       description: |-
         - This endpoint pauses an ABTest
         - You can only pause an activated ABTest.
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: abtest_ID
         in: path
@@ -412,7 +458,6 @@ paths:
           type: string
           example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
       requestBody:
-        description:
         required: true
         content:
           application/json:
@@ -424,21 +469,21 @@ paths:
                 paused:
                   type: boolean
       responses:
-        '204':
+        204:
           description: The ABTest has been paused
-        '400':
+        400:
           description: The ABTest has NOT been paused
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorResponse'
 
-  /backoffice/remote-configs/abtests/{abtest_ID}/promote:
+  /remote-configs/abtests/{abtest_ID}/promote:
     post:
       summary: Promote an ABTest
       description: This endpoint promotes an ABTest by selecting the new reference_value
       tags:
-      - Backoffice Remote Config
+      - Remote Configs
       parameters:
       - name: abtest_ID
         in: path
@@ -464,9 +509,9 @@ paths:
                   type: integer
                   example: 1692794054
       responses:
-        '204':
+        204:
           description: The reference_value of the remote config has been replaced by promoted_value
-        '400':
+        400:
           description: The ABTest has NOT been promoted
           content:
             application/json:

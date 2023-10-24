@@ -1,15 +1,15 @@
 """
-This module contains main endpoints.
+This module contains main endpoints of analytics backoffice API.
 """
 import contextlib
 from decimal import Decimal
 
 import boto3
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request, wrappers
 from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 
-from blueprints.backoffice_remote_configs import backoffice_remote_configs_endpoints
+from blueprints.applications import applications_endpoints
 from blueprints.remote_configs import remote_configs_endpoints
 
 
@@ -31,26 +31,42 @@ class FlaskAppEncoder(DefaultJSONProvider):
         return super().default(o)
 
 
-app = Flask(__name__)
-app.json_provider_class = FlaskAppEncoder
-app.json = FlaskAppEncoder(app)
-CORS(app)
+class FlaskApp(Flask):
+    """
+    This class redefines Flask class.
+    """
 
-app.register_blueprint(
-    backoffice_remote_configs_endpoints, url_prefix="/backoffice/remote-configs"
-)
+    def __init__(self, name):
+        Flask.__init__(self, name)
+        CORS(self)
+        self.json_provider_class = FlaskAppEncoder
+        self.json = FlaskAppEncoder(self)
+
+        self.config["athena"] = boto3.client("athena")
+        self.config["database"] = boto3.resource("dynamodb",)
+
+        @self.after_request
+        def after_request(response: wrappers.Response):
+            """after_request"""
+            if response.status_code == 308:
+                adapter = app.url_map.bind(request.host)
+                # pylint: disable=unpacking-non-sequence
+                endpoint, _ = adapter.match(path_info=f"{request.path}/", method=request.method)
+                endpoint_function = app.view_functions[endpoint]
+                return endpoint_function()
+            return response
+
+        @self.get("/")
+        def default():
+            """
+            Default endpoint.
+            """
+            return jsonify(), 204
+
+
+app = FlaskApp(__name__)
+app.register_blueprint(applications_endpoints, url_prefix="/applications")
 app.register_blueprint(remote_configs_endpoints, url_prefix="/remote-configs")
-
-app.config["database"] = boto3.resource("dynamodb")
-app.config["secrets_manager"] = boto3.client("secretsmanager")
-
-
-@app.get("/")
-def default():
-    """
-    Default endpoint.
-    """
-    return jsonify(), 204
 
 
 if __name__ == "__main__":

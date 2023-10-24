@@ -26,18 +26,22 @@ if [ $BRANCH_NAME = "master" ]; then
     export AWS_PROFILE=prod
     AWS_REGION="us-east-1"
     ENVIRONMENT="prod"
+    GEODE_DOMAIN_NAME="api.geode.com"
     PARAMETER_OVERRIDES="--parameter-overrides KinesisStreamShards=5 SolutionMode=Prod"
     if $IS_CHINA; then
         export AWS_PROFILE=prod-china
         AWS_REGION="cn-north-1"
+        GEODE_DOMAIN_NAME="cn-api.geode.com"
     fi
 elif [ $BRANCH_NAME = "dev" ]; then
     export AWS_PROFILE=dev
     AWS_REGION="eu-west-3"
     ENVIRONMENT="dev"
+    GEODE_DOMAIN_NAME="apidev.geode.com"
     if $IS_CHINA; then
         export AWS_PROFILE=dev-china
         AWS_REGION="cn-northwest-1"
+        GEODE_DOMAIN_NAME="cn-apidev.geode.com"
     fi
 else
     export AWS_PROFILE=sandbox
