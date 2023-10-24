@@ -7,6 +7,8 @@
             "GEODE_ENVIRONMENT": "%%ENVIRONMENT%%",
             "PROJECT_NAME": "%%PROJECT_NAME%%"
         },
+        "geode_base_path": "analytics-backoffice",
+        "geode_domain_name": "%%GEODE_DOMAIN_NAME%%",
         "profile_name": "%%PROFILE_NAME%%",
         "project_name": "%%PROJECT_NAME%%-backoffice",
         "role_name": "%%PROJECT_NAME%%-backoffice-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
