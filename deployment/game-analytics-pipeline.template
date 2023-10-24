@@ -254,6 +254,8 @@ Resources:
               - !Sub ${ABTestsTable.Arn}/index/*
               - !GetAtt RemoteConfigsTable.Arn
               - !Sub ${RemoteConfigsTable.Arn}/index/*
+              - !GetAtt RemoteConfigsConditionsTable.Arn
+              - !Sub ${RemoteConfigsConditionsTable.Arn}/index/*
               - !GetAtt UsersABTestsTable.Arn
               - !Sub ${UsersABTestsTable.Arn}/index/*
     Metadata:
@@ -2079,7 +2081,7 @@ Resources:
                   application/json: !Sub >
                     {
                       "applicationId": "$input.params('applicationId')",
-                      ""country"": ""$input.params('CloudFront-Viewer-Country')"",
+                      "country": "$input.params('CloudFront-Viewer-Country')",
                       "userId": "$input.params('userId')"
                     }
                 responses:
