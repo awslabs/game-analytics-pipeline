@@ -29,6 +29,15 @@ class RemoteConfigConditions:
         self.__user_data = user_data
 
     @property
+    def application_available(self) -> bool:
+        """
+        This method checks if remote config is available for user application.
+        """
+        if available_applications := self.__conditions.get("available_applications"):
+            return self.__user_data["application_ID"] in available_applications
+        return True
+
+    @property
     def country_available(self) -> bool:
         """
         This method checks if remote config is available for user country.

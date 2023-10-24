@@ -30,7 +30,7 @@ def handler(event: dict, context: dict):
     print(f"Context: {context}")
 
     user_ID = event["userId"]
-    user_data = {"country": event["country"]}
+    user_data = {"application_ID": event["applicationId"], "country": event["country"]}
 
     remote_configs = {}
 
@@ -78,14 +78,13 @@ def handler(event: dict, context: dict):
 
     return remote_configs
 
-def __conditions_match(remote_config_ID: str, condition_data: dict[str, Any]) -> bool:
-    remote_config_conditions = RemoteConfigConditions(
-        dynamodb, remote_config_ID, condition_data
+def __conditions_match(remote_config_ID: str, user_data: dict[str, Any]) -> bool:
+    conditions = RemoteConfigConditions(
+        dynamodb, remote_config_ID, user_data
     )
-    if not remote_config_conditions.country_available:
-        return False
-
-    return True
+    return bool(
+        conditions.application_available and conditions.country_available
+    )
 
 def __get_active_abtest(remote_config_ID: str):
     response = abtests_table.query(
