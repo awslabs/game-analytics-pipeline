@@ -272,6 +272,67 @@ paths:
         204:
           description: The remote config was activated successfully
 
+  /remote-configs/{remote_config_ID}/condition/{condition_type}:
+    post:
+      summary: Set Remote Config Condition
+      description: This endpoint sets a condition for a remote config.
+      tags:
+      - Remote Configs
+      parameters:
+      - name: remote_config_ID
+        in: path
+        description: ID of the remote config
+        required: true
+        schema:
+          type: string
+          example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
+      - name: condition_type
+        in: path
+        description: Type of condition
+        required: true
+        schema:
+          type: string
+          enum:
+          - available_applications
+          - available_countries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                condition_value:
+                  example: 'Can be anything: string, number, array, object, etc., excluding `null`'
+      responses:
+        204:
+          description: The condition was updated sucessfully
+    delete:
+      summary: Delete Remote Config Condition
+      description: This endpoint deletes a condition for a remote config.
+      tags:
+      - Remote Configs
+      parameters:
+      - name: remote_config_ID
+        in: path
+        description: ID of the remote config
+        required: true
+        schema:
+          type: string
+          example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
+      - name: condition_type
+        in: path
+        description: Type of condition
+        required: true
+        schema:
+          type: string
+          enum:
+          - available_applications
+          - available_countries
+      responses:
+        204:
+          description: The condition was deleted sucessfully
+
   /remote-configs/{remote_config_ID}/abtest:
     post:
       summary: Create an ABTest
