@@ -1,10 +1,9 @@
 """
 This module contains RemoteConfig class.
 """
-from collections import defaultdict
 from typing import Any
 
-from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.conditions import Key
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
 from models.ABTest import ABTest
@@ -71,8 +70,7 @@ class RemoteConfig:
         If a remote config has an active ABTest, we retrieve his group, or set the user to a group if it has none.
         """
         response = database.Table(constants.TABLE_REMOTE_CONFIGS).query(
-            IndexName="active-index",
-            KeyConditionExpression=Key("active").eq(1)
+            IndexName="active-index", KeyConditionExpression=Key("active").eq(1)
         )
 
         remote_configs = {}
@@ -80,10 +78,8 @@ class RemoteConfig:
             remote_config = RemoteConfig(
                 database, remote_config_data.pop("ID"), remote_config_data
             )
-            abtest = ABTest.active_from_remote_config_id(
-                database, remote_config.id)
-            user_remote_config = remote_config.to_user_remote_config(
-                uid, abtest)
+            abtest = ABTest.active_from_remote_config_id(database, remote_config.id)
+            user_remote_config = remote_config.to_user_remote_config(uid, abtest)
             remote_configs[user_remote_config.pop("name")] = user_remote_config
 
         return remote_configs
@@ -139,13 +135,10 @@ class RemoteConfig:
         """
         # Check if there is already a remote config with the same name
         if self.__name_exists(self.name):
-            raise AssertionError(
-                f"There is already a remote config named {self.name}"
-            )
+            raise AssertionError(f"There is already a remote config named {self.name}")
 
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS).put_item(
-            Item=self.__data
-            | {"ID": self.__remote_config_ID, "active": 0}
+            Item=self.__data | {"ID": self.__remote_config_ID, "active": 0}
         )
 
     def create_abtest(self, abtest_ID: str, abtest_data: dict[str, Any]):
@@ -172,6 +165,21 @@ class RemoteConfig:
             if abtest.active:
                 raise AssertionError("You can't update an activated ABTest")
             abtest.delete()
+
+    def delete_condition(self, condition_type: str):
+        """
+        This method deletes condition for this RemoteConfig.
+        It raises AssertionError if condition_type is not allowed.
+        """
+        if condition_type not in constants.ALLOWED_REMOTE_CONFIGS_CONDITIONS:
+            raise AssertionError(f"condition_type {condition_type} not allowed")
+
+        self.__database.Table(constants.TABLE_REMOTE_CONFIGS_CONDITIONS).delete_item(
+            Key={
+                "remote_config_ID": self.__remote_config_ID,
+                "condition_type": condition_type,
+            }
+        )
 
     def has_active_abtest(self, active_abtests: list[ABTest]) -> bool:
         """
@@ -205,8 +213,7 @@ class RemoteConfig:
             raise AssertionError("You can't promote a deactivated ABTest")
 
         if promoted_value not in [self.reference_value] + abtest.variants:
-            raise AssertionError(
-                f"{promoted_value} value not in ABTest {abtest_ID}")
+            raise AssertionError(f"{promoted_value} value not in ABTest {abtest_ID}")
 
         # Update reference value of remote config
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS).update_item(
@@ -220,7 +227,25 @@ class RemoteConfig:
         abtest.purge()
         abtest.delete()
 
-    def to_user_remote_config(self, uid: str, abtest: ABTest | None = None) -> dict[str, str]:
+    def set_condition(self, condition_type: str, condition_value: Any):
+        """
+        This method sets a condition for this RemoteConfig.
+        It raises AssertionError if condition_type is not allowed.
+        """
+        if condition_type not in constants.ALLOWED_REMOTE_CONFIGS_CONDITIONS:
+            raise AssertionError(f"condition_type {condition_type} not allowed")
+
+        self.__database.Table(constants.TABLE_REMOTE_CONFIGS_CONDITIONS).put_item(
+            Item={
+                "remote_config_ID": self.__remote_config_ID,
+                "condition_type": condition_type,
+                "condition_value": condition_value,
+            }
+        )
+
+    def to_user_remote_config(
+        self, uid: str, abtest: ABTest | None = None
+    ) -> dict[str, str]:
         """
         This method returns a dict that represents the remote config with user specifications.
         It assigns user to a group of the ABTest if he has not been assigned.

@@ -109,7 +109,6 @@ def create_abtest(remote_config_ID: str):
     payload = request.get_json(force=True)
 
     remote_config = RemoteConfig.from_id(database, remote_config_ID)
-
     if not remote_config:
         return (
             jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
@@ -128,6 +127,54 @@ def create_abtest(remote_config_ID: str):
     return jsonify(abtest_ID=abtest_ID)
 
 
+@backoffice_remote_configs_endpoints.post(
+    "/<remote_config_ID>/condition/<condition_type>"
+)
+def set_condition(remote_config_ID: str, condition_type: str):
+    """
+    This endpoint allows to set remote config condition.
+    """
+    database: DynamoDBServiceResource = current_app.config["database"]
+    payload = request.get_json(force=True)
+
+    remote_config = RemoteConfig.from_id(database, remote_config_ID)
+    if not remote_config:
+        return (
+            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
+            400,
+        )
+
+    try:
+        remote_config.set_condition(condition_type, payload["condition_value"])
+    except (AssertionError, KeyError) as e:
+        return jsonify(error=str(e)), 400
+
+    return jsonify(), 204
+
+
+@backoffice_remote_configs_endpoints.delete(
+    "/<remote_config_ID>/condition/<condition_type>"
+)
+def delete_condition(remote_config_ID: str, condition_type: str):
+    """
+    This endpoint allows to delete remote config condition.
+    """
+    database: DynamoDBServiceResource = current_app.config["database"]
+
+    remote_config = RemoteConfig.from_id(database, remote_config_ID)
+    if not remote_config:
+        return (
+            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
+            400,
+        )
+
+    try:
+        remote_config.delete_condition(condition_type)
+    except AssertionError as e:
+        return jsonify(error=str(e)), 400
+    return jsonify(), 204
+
+
 @backoffice_remote_configs_endpoints.put("/abtests/<abtest_ID>")
 def update_abtest(abtest_ID: str):
     """
@@ -137,7 +184,6 @@ def update_abtest(abtest_ID: str):
     payload = request.get_json(force=True)
 
     remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
     if not remote_config:
         return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
 
@@ -159,7 +205,6 @@ def delete_abtest(abtest_ID: str):
     database: DynamoDBServiceResource = current_app.config["database"]
 
     remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
     if not remote_config:
         return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
 
@@ -180,8 +225,6 @@ def activate_abtest(abtest_ID: str):
     payload = request.get_json(force=True)
 
     remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
-    active_abtests = ABTest.get_actives(database)
     if not remote_config:
         return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
     if not remote_config.active:
@@ -189,7 +232,8 @@ def activate_abtest(abtest_ID: str):
             jsonify(error="You can't activate an ABTest on deactivate remote config"),
             400,
         )
-    if remote_config.has_active_abtest(active_abtests):
+
+    if remote_config.has_active_abtest(ABTest.get_actives(database)):
         return (
             jsonify(error="There is already an active abtest on this remote config"),
             400,
@@ -212,7 +256,6 @@ def pause_abtest(abtest_ID: str):
     payload = request.get_json(force=True)
 
     remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
     if not remote_config:
         return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
 
@@ -236,7 +279,6 @@ def promote_abtest(abtest_ID: str):
     payload = request.get_json(force=True)
 
     remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
     if not remote_config:
         return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
 
