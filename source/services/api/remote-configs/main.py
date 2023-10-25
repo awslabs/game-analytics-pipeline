@@ -36,11 +36,15 @@ def handler(event: dict, context: dict):
 
     for remote_config in __get_active_remote_configs():
         remote_config_ID = remote_config["ID"]
-        if not __conditions_match(remote_config_ID, user_data):
-            continue
-
         value = remote_config["reference_value"]
         value_origin = "reference_value"
+
+        if override_value := __override_value(remote_config_ID, user_data):
+            remote_configs[remote_config["name"]] = {
+                "value": override_value,
+                "value_origin": value_origin,
+            }
+            continue
 
         if abtest := __get_active_abtest(remote_config_ID):
 
@@ -78,13 +82,16 @@ def handler(event: dict, context: dict):
 
     return remote_configs
 
-def __conditions_match(remote_config_ID: str, user_data: dict[str, Any]) -> bool:
-    conditions = RemoteConfigConditions(
-        dynamodb, remote_config_ID, user_data
+def __override_value(remote_config_ID: str, user_data: dict[str, Any]) -> Any | None:
+    response = dynamodb.Table(os.environ["REMOTE_CONFIGS_OVERRIDE_TABLE"]).query(
+        KeyConditionExpression=Key("remote_config_ID").eq(remote_config_ID)
     )
-    return bool(
-        conditions.application_available and conditions.country_available
-    )
+    for item in response["Items"]:
+        conditions = RemoteConfigConditions(
+            dynamodb, item["condition_ID"], user_data
+        )
+        if conditions.application_available and conditions.country_available:
+            return item["override_value"]
 
 def __get_active_abtest(remote_config_ID: str):
     response = abtests_table.query(

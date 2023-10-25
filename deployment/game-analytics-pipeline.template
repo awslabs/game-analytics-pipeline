@@ -226,6 +226,7 @@ Resources:
           ABTESTS_TABLE: !Ref ABTestsTable
           REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
           REMOTE_CONFIGS_CONDITIONS_TABLE: !Ref RemoteConfigsConditionsTable
+          REMOTE_CONFIGS_OVERRIDE_TABLE: !Ref RemoteConfigsOverrideTable
           USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
           CACHE_TIMEOUT_SECONDS: 60
       Policies:
@@ -256,6 +257,8 @@ Resources:
               - !Sub ${RemoteConfigsTable.Arn}/index/*
               - !GetAtt RemoteConfigsConditionsTable.Arn
               - !Sub ${RemoteConfigsConditionsTable.Arn}/index/*
+              - !GetAtt RemoteConfigsOverrideTable.Arn
+              - !Sub ${RemoteConfigsOverrideTable.Arn}/index/*
               - !GetAtt UsersABTestsTable.Arn
               - !Sub ${UsersABTestsTable.Arn}/index/*
     Metadata:

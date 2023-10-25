@@ -1,5 +1,5 @@
 """
-This module contains functions to verify remote config conditions.
+This module contains RemoteConfigConditions class.
 """
 import os
 from typing import Any
@@ -16,11 +16,11 @@ class RemoteConfigConditions:
     def __init__(
         self,
         dynamodb: DynamoDBServiceResource,
-        remote_config_ID: str,
+        condition_ID: str,
         user_data: dict[str, Any],
     ):
         response = dynamodb.Table(os.environ["REMOTE_CONFIGS_CONDITIONS_TABLE"]).query(
-            KeyConditionExpression=Key("remote_config_ID").eq(remote_config_ID),
+            KeyConditionExpression=Key("condition_ID").eq(condition_ID),
         )
         self.__conditions = {
             item["condition_type"]: item["condition_value"]
