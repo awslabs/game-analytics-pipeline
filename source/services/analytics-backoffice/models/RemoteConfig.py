@@ -8,6 +8,7 @@ from boto3.dynamodb.conditions import Key
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
 from models.ABTest import ABTest
+from models.RemoteConfigConditions import RemoteConfigCondition
 from utils import constants
 
 
@@ -143,21 +144,6 @@ class RemoteConfig:
                 raise AssertionError("You can't update an activated ABTest")
             abtest.delete()
 
-    def delete_condition(self, condition_type: str):
-        """
-        This method deletes condition for this RemoteConfig.
-        It raises AssertionError if condition_type is not allowed.
-        """
-        if condition_type not in constants.ALLOWED_REMOTE_CONFIGS_CONDITIONS:
-            raise AssertionError(f"condition_type {condition_type} not allowed")
-
-        self.__database.Table(constants.TABLE_REMOTE_CONFIGS_CONDITIONS).delete_item(
-            Key={
-                "remote_config_ID": self.__remote_config_ID,
-                "condition_type": condition_type,
-            }
-        )
-
     def has_active_abtest(self, active_abtests: list[ABTest]) -> bool:
         """
         This method returns True if this RemoteConfig
@@ -166,6 +152,26 @@ class RemoteConfig:
         return any(
             abtest.remote_config_ID == self.__remote_config_ID
             for abtest in active_abtests
+        )
+
+    def override(self, condition_ID: str, override_value: Any):
+        """
+        This method adds override on remote config with condition.
+        """
+        if not RemoteConfigCondition.exists(self.__database, condition_ID):
+            raise AssertionError(
+                f"There is no remote config condition with `{condition_ID}` id"
+            )
+
+        if isinstance(override_value, (float, int)):
+            override_value = Decimal(override_value)
+
+        self.__database.Table(constants.TABLE_REMOTE_CONFIGS_OVERRIDE).put_item(
+            Item={
+                "remote_config_ID": self.__remote_config_ID,
+                "condition_ID": condition_ID,
+                "override_value": override_value
+            }
         )
 
     def pause_abtest(self, abtest_ID: str, paused: bool):
@@ -203,25 +209,6 @@ class RemoteConfig:
         abtest.save_history(self.name, self.reference_value, promoted_value)
         abtest.purge()
         abtest.delete()
-
-    def set_condition(self, condition_type: str, condition_value: Any):
-        """
-        This method sets a condition for this RemoteConfig.
-        It raises AssertionError if condition_type is not allowed.
-        """
-        if condition_type not in constants.ALLOWED_REMOTE_CONFIGS_CONDITIONS:
-            raise AssertionError(f"condition_type {condition_type} not allowed")
-
-        if isinstance(condition_value, (float, int)):
-            condition_value = Decimal(condition_value)
-
-        self.__database.Table(constants.TABLE_REMOTE_CONFIGS_CONDITIONS).put_item(
-            Item={
-                "remote_config_ID": self.__remote_config_ID,
-                "condition_type": condition_type,
-                "condition_value": condition_value,
-            }
-        )
 
     def update(self, new_data: dict[str, Any]):
         """

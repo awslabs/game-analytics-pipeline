@@ -1380,6 +1380,28 @@ Resources:
         SSEEnabled: true
         SSEType: KMS
 
+  RemoteConfigsOverrideTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-remote-configs-override'
+      AttributeDefinitions:
+        - AttributeName: remote_config_ID
+          AttributeType: S
+        - AttributeName: condition_ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: remote_config_ID
+          KeyType: HASH
+        - AttributeName: condition_ID
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
   RemoteConfigsConditionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -1387,12 +1409,12 @@ Resources:
       DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-remote-configs-conditions'
       AttributeDefinitions:
-        - AttributeName: remote_config_ID
+        - AttributeName: condition_ID
           AttributeType: S
         - AttributeName: condition_type
           AttributeType: S
       KeySchema:
-        - AttributeName: remote_config_ID
+        - AttributeName: condition_ID
           KeyType: HASH
         - AttributeName: condition_type
           KeyType: RANGE

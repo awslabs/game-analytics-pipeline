@@ -43,7 +43,7 @@ class FlaskApp(Flask):
         self.json = FlaskAppEncoder(self)
 
         self.config["athena"] = boto3.client("athena")
-        self.config["database"] = boto3.resource("dynamodb",)
+        self.config["database"] = boto3.resource("dynamodb")
 
         @self.after_request
         def after_request(response: wrappers.Response):

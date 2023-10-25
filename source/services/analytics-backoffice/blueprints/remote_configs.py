@@ -9,11 +9,10 @@ from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
 from models.ABTest import ABTest
 from models.RemoteConfig import RemoteConfig
+from models.RemoteConfigConditions import RemoteConfigCondition
 
 
-remote_configs_endpoints = Blueprint(
-    "remote_configs_endpoints", __name__
-)
+remote_configs_endpoints = Blueprint("remote_configs_endpoints", __name__)
 
 
 # @remote_configs_endpoints.get("/")
@@ -100,51 +99,30 @@ def activate_remote_config(remote_config_ID: str):
     return jsonify(), 204
 
 
-@remote_configs_endpoints.post(
-    "/<remote_config_ID>/condition/<condition_type>"
-)
-def set_condition(remote_config_ID: str, condition_type: str):
+@remote_configs_endpoints.post("/<remote_config_ID>/override")
+def override_remote_config(remote_config_ID: str):
     """
-    This endpoint allows to set remote config condition.
+    This endpoint allows to override a remote config with condition.
     """
     database: DynamoDBServiceResource = current_app.config["database"]
     payload = request.get_json(force=True)
 
-    remote_config = RemoteConfig.from_id(database, remote_config_ID)
-    if not remote_config:
-        return (
-            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
-            400,
-        )
-
     try:
-        remote_config.set_condition(condition_type, payload["condition_value"])
-    except (AssertionError, KeyError) as e:
-        return jsonify(error=str(e)), 400
-
-    return jsonify(), 204
-
-
-@remote_configs_endpoints.delete(
-    "/<remote_config_ID>/condition/<condition_type>"
-)
-def delete_condition(remote_config_ID: str, condition_type: str):
-    """
-    This endpoint allows to delete remote config condition.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-
-    remote_config = RemoteConfig.from_id(database, remote_config_ID)
-    if not remote_config:
-        return (
-            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
-            400,
-        )
-
-    try:
-        remote_config.delete_condition(condition_type)
+        condition_ID = payload["condition_ID"]
+        assert condition_ID, "condition_ID can NOT be empty"
+        override_value = payload["override_value"]
     except AssertionError as e:
         return jsonify(error=str(e)), 400
+    except KeyError as e:
+        return jsonify(error=f"Invalid payload : missing {e}"), 400
+
+    remote_config = RemoteConfig.from_id(database, remote_config_ID)
+    if not remote_config:
+        return (
+            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
+            400,
+        )
+    remote_config.override(condition_ID, override_value)
     return jsonify(), 204
 
 
@@ -296,4 +274,23 @@ def promote_abtest(abtest_ID: str):
     except AssertionError as e:
         return jsonify(error=str(e)), 400
 
+    return jsonify(), 204
+
+
+@remote_configs_endpoints.post("/conditions/<condition_ID>")
+def set_condition(condition_ID: str):
+    """
+    This endpoint allows to set remote config condition.
+    """
+    database: DynamoDBServiceResource = current_app.config["database"]
+    payload = request.get_json(force=True) | {"condition_ID": condition_ID}
+
+    try:
+        condition = RemoteConfigCondition(database, payload)
+    except AssertionError as e:
+        return jsonify(error=str(e)), 400
+    except KeyError as e:
+        return jsonify(error=f"Invalid payload : missing {e}"), 400
+
+    condition.update_database()
     return jsonify(), 204
