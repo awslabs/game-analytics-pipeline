@@ -225,8 +225,8 @@ Resources:
         Variables:
           ABTESTS_TABLE: !Ref ABTestsTable
           REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
-          REMOTE_CONFIGS_CONDITIONS_TABLE: !Ref RemoteConfigsConditionsTable
-          REMOTE_CONFIGS_OVERRIDE_TABLE: !Ref RemoteConfigsOverrideTable
+          AUDIENCE_TABLE: !Ref AudiencesTable
+          REMOTE_CONFIGS_OVERRIDE_TABLE: !Ref RemoteConfigsOverridesTable
           USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
           CACHE_TIMEOUT_SECONDS: 60
       Policies:
@@ -255,10 +255,10 @@ Resources:
               - !Sub ${ABTestsTable.Arn}/index/*
               - !GetAtt RemoteConfigsTable.Arn
               - !Sub ${RemoteConfigsTable.Arn}/index/*
-              - !GetAtt RemoteConfigsConditionsTable.Arn
-              - !Sub ${RemoteConfigsConditionsTable.Arn}/index/*
-              - !GetAtt RemoteConfigsOverrideTable.Arn
-              - !Sub ${RemoteConfigsOverrideTable.Arn}/index/*
+              - !GetAtt AudiencesTable.Arn
+              - !Sub ${AudiencesTable.Arn}/index/*
+              - !GetAtt RemoteConfigsOverridesTable.Arn
+              - !Sub ${RemoteConfigsOverridesTable.Arn}/index/*
               - !GetAtt UsersABTestsTable.Arn
               - !Sub ${UsersABTestsTable.Arn}/index/*
     Metadata:
@@ -544,9 +544,6 @@ Resources:
           AUTHORIZATIONS_TABLE: !Ref AuthorizationsTable
           APPLICATION_AUTHORIZATIONS_INDEX: 'ApplicationAuthorizations'
           APPLICATIONS_TABLE: !Ref ApplicationsTable
-          ABTESTS_TABLE: !Ref ABTestsTable
-          REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
-          USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
       Policies:
         Version: 2012-10-17
         Statement:
@@ -573,13 +570,7 @@ Resources:
             Resource:
               - !GetAtt ApplicationsTable.Arn
               - !GetAtt AuthorizationsTable.Arn
-              - !GetAtt ABTestsTable.Arn
-              - !GetAtt RemoteConfigsTable.Arn
-              - !GetAtt UsersABTestsTable.Arn
               - !Sub '${AuthorizationsTable.Arn}/index/*'
-              - !Sub '${ABTestsTable.Arn}/index/*'
-              - !Sub '${RemoteConfigsTable.Arn}/index/*'
-              - !Sub '${UsersABTestsTable.Arn}/index/*'
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -1269,7 +1260,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
+      DeletionProtectionEnabled: false
       TableName: !Sub '${AWS::StackName}-applications'
       AttributeDefinitions:
         - AttributeName: application_id
@@ -1287,7 +1278,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
+      DeletionProtectionEnabled: false
       TableName: !Sub '${AWS::StackName}-authorizations'
       AttributeDefinitions:
         - AttributeName: api_key_id
@@ -1331,7 +1322,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
+      DeletionProtectionEnabled: false
       TableName: !Sub '${AWS::StackName}-idempotency'
       AttributeDefinitions:
         - AttributeName: event_id
@@ -1352,72 +1343,33 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
+      DeletionProtectionEnabled: false
       TableName: !Sub '${AWS::StackName}-remote-configs'
       AttributeDefinitions:
-        - AttributeName: ID
-          AttributeType: S
-        - AttributeName: active
-          AttributeType: N
-        - AttributeName: name
+        - AttributeName: remote_config_name
           AttributeType: S
       KeySchema:
-        - AttributeName: ID
+        - AttributeName: remote_config_name
           KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: active-index
-          KeySchema:
-            - AttributeName: active
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-        - IndexName: name-index
-          KeySchema:
-            - AttributeName: name
-              KeyType: HASH
-          Projection:
-            ProjectionType: KEYS_ONLY
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
 
-  RemoteConfigsOverrideTable:
+  AudiencesTable:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
-      TableName: !Sub '${AWS::StackName}-remote-configs-override'
+      DeletionProtectionEnabled: false
+      TableName: !Sub '${AWS::StackName}-audiences'
       AttributeDefinitions:
-        - AttributeName: remote_config_ID
-          AttributeType: S
-        - AttributeName: condition_ID
-          AttributeType: S
-      KeySchema:
-        - AttributeName: remote_config_ID
-          KeyType: HASH
-        - AttributeName: condition_ID
-          KeyType: RANGE
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-
-  RemoteConfigsConditionsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
-      TableName: !Sub '${AWS::StackName}-remote-configs-conditions'
-      AttributeDefinitions:
-        - AttributeName: condition_ID
+        - AttributeName: audience_name
           AttributeType: S
         - AttributeName: condition_type
           AttributeType: S
       KeySchema:
-        - AttributeName: condition_ID
+        - AttributeName: audience_name
           KeyType: HASH
         - AttributeName: condition_type
           KeyType: RANGE
@@ -1431,58 +1383,68 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
+      DeletionProtectionEnabled: false
       TableName: !Sub '${AWS::StackName}-abtests'
       AttributeDefinitions:
-        - AttributeName: ID
-          AttributeType: S
-        - AttributeName: active
-          AttributeType: N
-        - AttributeName: name
-          AttributeType: S
-        - AttributeName: remote_config_ID
+        - AttributeName: abtest_name
           AttributeType: S
       KeySchema:
-        - AttributeName: ID
+        - AttributeName: abtest_name
           KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: active-index
-          KeySchema:
-            - AttributeName: active
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-        - IndexName: remote_config_ID-index
-          KeySchema:
-            - AttributeName: remote_config_ID
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-        - IndexName: remote_config_ID-name-index
-          KeySchema:
-            - AttributeName: remote_config_ID
-              KeyType: HASH
-            - AttributeName: name
-              KeyType: RANGE
-          Projection:
-            ProjectionType: KEYS_ONLY
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
 
-  ABTestsHistoryTable:
+  RemoteConfigsOverridesTable:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
-      TableName: !Sub '${AWS::StackName}-abtests-history'
+      DeletionProtectionEnabled: false
+      TableName: !Sub '${AWS::StackName}-remote-configs-overrides'
       AttributeDefinitions:
-        - AttributeName: abtest_ID
+        - AttributeName: remote_config_name
+          AttributeType: S
+        - AttributeName: audience_name
+          AttributeType: S
+        - AttributeName: override_type
           AttributeType: S
       KeySchema:
-        - AttributeName: abtest_ID  
+        - AttributeName: remote_config_name
+          KeyType: HASH
+        - AttributeName: audience_name
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: audience_name-index
+          KeySchema:
+            - AttributeName: audience_name
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: override_type-index
+          KeySchema:
+            - AttributeName: override_type
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+
+  RemoteConfigsOverridesHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      TableName: !Sub '${AWS::StackName}-remote-configs-overrides-history'
+      AttributeDefinitions:
+        - AttributeName: ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ID
           KeyType: HASH
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
@@ -1494,27 +1456,27 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: true
+      DeletionProtectionEnabled: false
       TableName: !Sub '${AWS::StackName}-users-abtests'
       AttributeDefinitions:
         - AttributeName: uid
           AttributeType: S
-        - AttributeName: abtest_ID
+        - AttributeName: abtest_name
           AttributeType: S
       KeySchema:
         - AttributeName: uid
           KeyType: HASH
-        - AttributeName: abtest_ID
+        - AttributeName: abtest_name
           KeyType: RANGE
       GlobalSecondaryIndexes:
-        - IndexName: abtest_ID-index
-          KeySchema:
-            - AttributeName: abtest_ID
-              KeyType: HASH
-          Projection:
-            ProjectionType: INCLUDE
-            NonKeyAttributes:
-              - uid
+      - IndexName: abtest_name-index
+        KeySchema:
+          - AttributeName: abtest_name
+            KeyType: HASH
+        Projection:
+          ProjectionType: INCLUDE
+          NonKeyAttributes:
+            - uid
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:

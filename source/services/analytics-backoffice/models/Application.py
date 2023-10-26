@@ -19,13 +19,11 @@ class Application:
 
     def __init__(
         self,
-        database: DynamoDBServiceResource,
         athena: AthenaClient,
         application_ID: str,
         application_data: dict[str, Any],
     ):
         self.__athena = athena
-        self.__database = database
         self.__application_ID = application_ID
         self.__data = application_data
 
@@ -44,18 +42,18 @@ class Application:
             Key={"application_id": application_ID}
         )
         if item := response.get("Item"):
-            return cls(database, athena, item.pop("application_id"), item)
+            return cls(athena, item.pop("application_id"), item)
 
     @staticmethod
     def get_all(
         database: DynamoDBServiceResource, athena: AthenaClient
     ) -> List["Application"]:
         """
-        This static method returns all applications
+        This static method returns all applications.
         """
         response = database.Table(constants.TABLE_APPLICATIONS).scan()
         return [
-            Application(database, athena, item.pop("application_id"), item)
+            Application(athena, item.pop("application_id"), item)
             for item in response["Items"]
         ]
 
@@ -118,7 +116,7 @@ class Application:
             for row in result_set["Rows"][1:]
         ]
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """
         This method returns a dict that represents the Application.
         """

@@ -1,296 +1,267 @@
 """
 This module contains remote_configs endpoints.
 """
-from uuid import uuid4
-
 from flask import Blueprint, current_app, jsonify, request
 
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
 from models.ABTest import ABTest
+from models.Audience import Audience
 from models.RemoteConfig import RemoteConfig
-from models.RemoteConfigConditions import RemoteConfigCondition
+from models.RemoteConfigOverride import RemoteConfigOverride
 
 
 remote_configs_endpoints = Blueprint("remote_configs_endpoints", __name__)
 
 
-# @remote_configs_endpoints.get("/")
-# def get_all_remote_configs():
-#     """
-#     This endpoint returns all remote configs.
-#     """
-#     return jsonify(remote_configs=RemoteConfig.get_all(current_app.config["database"]))
-
-
-@remote_configs_endpoints.post("/")
-def create_remote_config():
+@remote_configs_endpoints.get("/")
+def get_remote_configs():
     """
-    This endpoint allows to create a remote config.
+    This endpoint returns all remote configs.
+    """
+    return jsonify(remote_configs=RemoteConfig.get_all(current_app.config["database"]))
+
+
+@remote_configs_endpoints.post("/<remote_config_name>")
+def set_remote_config(remote_config_name: str):
+    """
+    This endpoint sets a remote config.
     """
     database: DynamoDBServiceResource = current_app.config["database"]
-    payload = request.get_json(force=True)
+    payload = request.get_json(force=True) | {"remote_config_name": remote_config_name}
 
-    remote_config_ID = str(uuid4())
     try:
-        remote_config = RemoteConfig.from_dict(database, remote_config_ID, payload)
-        remote_config.create()
+        remote_config = RemoteConfig(database, payload)
+    except KeyError as e:
+        return jsonify(error=f"Invalid payload : missing {e}"), 400
     except AssertionError as e:
         return jsonify(error=str(e)), 400
 
-    return jsonify(remote_config_ID=remote_config_ID), 200
+    if remote_config.activated:
+        return jsonify(error="You can NOT update activated remote config"), 400
 
-
-@remote_configs_endpoints.put("/<remote_config_ID>")
-def update_remote_config(remote_config_ID: str):
-    """
-    This endpoint allows to update a remote config.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-    payload = request.get_json(force=True)
-
-    remote_config = RemoteConfig.from_id(database, remote_config_ID)
-    if not remote_config:
-        return (
-            jsonify(error=f"There is no remote config with ID : {remote_config_ID}"),
-            400,
-        )
-
-    try:
-        remote_config.update(payload)
-    except AssertionError as e:
-        return jsonify(error=str(e)), 400
-
+    remote_config.update_database()
     return jsonify(), 204
 
 
-@remote_configs_endpoints.delete("/<remote_config_ID>")
-def delete_remote_config(remote_config_ID: str):
+@remote_configs_endpoints.post("/<remote_config_name>/activate")
+def activate_remote_config(remote_config_name: str):
     """
-    This endpoint allows to delete a remote config.
+    This endpoint activates a remote config.
     """
     database: DynamoDBServiceResource = current_app.config["database"]
-    remote_config = RemoteConfig.from_id(database, remote_config_ID)
+
+    remote_config = RemoteConfig.from_name(database, remote_config_name)
     if not remote_config:
         return (
-            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
+            jsonify(error=f"There is no remote config with name {remote_config_name}"),
             400,
         )
-    if remote_config.active:
-        return jsonify(error="You can't delete an active remote config"), 400
+
+    remote_config.activate()
+    return jsonify(), 204
+
+
+@remote_configs_endpoints.delete("/<remote_config_name>")
+def delete_remote_config(remote_config_name: str):
+    """
+    This endpoint deletes a remote config.
+    """
+    database: DynamoDBServiceResource = current_app.config["database"]
+
+    remote_config = RemoteConfig.from_name(database, remote_config_name)
+    if not remote_config:
+        return (
+            jsonify(error=f"There is no remote config with name {remote_config_name}"),
+            400,
+        )
+
+    if remote_config.activated:
+        return jsonify(error="You can NOT delete activated remote config"), 400
 
     remote_config.delete()
     return jsonify(), 204
 
 
-@remote_configs_endpoints.post("/<remote_config_ID>/activate")
-def activate_remote_config(remote_config_ID: str):
+@remote_configs_endpoints.post("/<remote_config_name>/override/<audience_name>")
+def set_remote_config_override(remote_config_name: str, audience_name: str):
     """
-    This endpoint allows to activate a remote config.
+    This endpoint sets override for a remote config.
     """
     database: DynamoDBServiceResource = current_app.config["database"]
-    remote_config = RemoteConfig.from_id(database, remote_config_ID)
-    if not remote_config:
+    payload = request.get_json(force=True) | {
+        "remote_config_name": remote_config_name,
+        "audience_name": audience_name,
+    }
+
+    if not RemoteConfig.exists(database, remote_config_name):
         return (
-            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
+            jsonify(error=f"There is no remote config with name {remote_config_name}"),
             400,
         )
-    remote_config.activate()
-    return jsonify(), 204
 
-
-@remote_configs_endpoints.post("/<remote_config_ID>/override")
-def override_remote_config(remote_config_ID: str):
-    """
-    This endpoint allows to override a remote config with condition.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-    payload = request.get_json(force=True)
+    if not Audience.exists(database, audience_name):
+        return jsonify(error=f"There is no audience with name {audience_name}"), 400
 
     try:
-        condition_ID = payload["condition_ID"]
-        assert condition_ID, "condition_ID can NOT be empty"
-        override_value = payload["override_value"]
+        override = RemoteConfigOverride(database, payload)
     except AssertionError as e:
         return jsonify(error=str(e)), 400
     except KeyError as e:
         return jsonify(error=f"Invalid payload : missing {e}"), 400
 
-    remote_config = RemoteConfig.from_id(database, remote_config_ID)
-    if not remote_config:
-        return (
-            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
-            400,
+    if override.activated:
+        return jsonify(error="You can NOT update activated remote config override"), 400
+
+    if override.override_type == "abtest":
+        if not ABTest.exists(database, override.override_value):
+            return (
+                jsonify(
+                    error=f"There is no ABTest with name {override.override_value}"
+                ),
+                400,
+            )
+
+        remote_configs_overrides = RemoteConfigOverride.from_abtest_name(
+            database, override.override_value, exclude=override
         )
-    remote_config.override(condition_ID, override_value)
+
+        if len(remote_configs_overrides) > 0:
+            return (
+                jsonify(
+                    error=f"ABTest {override.override_value} is already linked to a remote config override"
+                ),
+                400,
+            )
+
+    override.update_database()
     return jsonify(), 204
 
 
-@remote_configs_endpoints.post("/<remote_config_ID>/abtest")
-def create_abtest(remote_config_ID: str):
+@remote_configs_endpoints.delete("/<remote_config_name>/override/<audience_name>")
+def delete_remote_config_override(remote_config_name: str, audience_name: str):
     """
-    This endpoint allows to create an abtest from a remote config.
+    This endpoint deletes override for a remote config.
     """
     database: DynamoDBServiceResource = current_app.config["database"]
-    payload = request.get_json(force=True)
 
-    remote_config = RemoteConfig.from_id(database, remote_config_ID)
-
-    if not remote_config:
+    override = RemoteConfigOverride.from_database(
+        database, remote_config_name, audience_name
+    )
+    if not override:
         return (
-            jsonify(error=f"There is no remote config with id `{remote_config_ID}`"),
-            400,
-        )
-
-    abtest_ID = str(uuid4())
-
-    try:
-        remote_config.create_abtest(abtest_ID, payload)
-    except AssertionError as e:
-        return jsonify(error=str(e)), 400
-    except KeyError as e:
-        return jsonify(error=f"missing {e}"), 400
-
-    return jsonify(abtest_ID=abtest_ID)
-
-
-@remote_configs_endpoints.put("/abtests/<abtest_ID>")
-def update_abtest(abtest_ID: str):
-    """
-    This endpoint allows to update an abtest.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-    payload = request.get_json(force=True)
-
-    remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
-    if not remote_config:
-        return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
-
-    try:
-        remote_config.update_abtest(abtest_ID, payload)
-    except AssertionError as e:
-        return jsonify(error=str(e)), 400
-    except KeyError as e:
-        return jsonify(error=f"missing {e}"), 400
-
-    return jsonify(), 204
-
-
-@remote_configs_endpoints.delete("/abtests/<abtest_ID>")
-def delete_abtest(abtest_ID: str):
-    """
-    This endpoint allows to delete an abtest.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-
-    remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
-    if not remote_config:
-        return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
-
-    try:
-        remote_config.delete_abtest(abtest_ID)
-    except AssertionError as e:
-        return jsonify(error=str(e)), 400
-
-    return jsonify(), 204
-
-
-@remote_configs_endpoints.post("/abtests/<abtest_ID>/activate")
-def activate_abtest(abtest_ID: str):
-    """
-    This endpoint allows to activate an abtest.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-    payload = request.get_json(force=True)
-
-    remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
-    active_abtests = ABTest.get_actives(database)
-    if not remote_config:
-        return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
-    if not remote_config.active:
-        return (
-            jsonify(error="You can't activate an ABTest on deactivate remote config"),
-            400,
-        )
-    if remote_config.has_active_abtest(active_abtests):
-        return (
-            jsonify(error="There is already an active abtest on this remote config"),
+            jsonify(
+                error=f"There is not remote config override with {remote_config_name} remote_config_name and {audience_name} audience_name."
+            ),
             400,
         )
 
-    try:
-        remote_config.activate_abtest(abtest_ID, payload.get("start_timestamp"))
-    except AssertionError as e:
-        return jsonify(error=str(e)), 400
+    if override.activated:
+        return jsonify(error="You can NOT delete activated remote config override"), 400
 
+    override.delete()
     return jsonify(), 204
 
 
-@remote_configs_endpoints.post("/abtests/<abtest_ID>/pause")
-def pause_abtest(abtest_ID: str):
+@remote_configs_endpoints.post(
+    "/<remote_config_name>/override/<audience_name>/activate"
+)
+def activate_remote_config_override(remote_config_name: str, audience_name: str):
     """
-    This endpoint allows to pause an abtest.
+    This endpoint activates/deactivates override for a remote config.
     """
     database: DynamoDBServiceResource = current_app.config["database"]
     payload = request.get_json(force=True)
 
-    remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
-    if not remote_config:
-        return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
-
-    if not isinstance(payload.get("paused"), bool):
-        return jsonify(error="`paused` should be boolean"), 400
-
     try:
-        remote_config.pause_abtest(abtest_ID, payload["paused"])
-    except AssertionError as e:
-        return jsonify(error=str(e)), 400
-
-    return jsonify(), 204
-
-
-@remote_configs_endpoints.post("/abtests/<abtest_ID>/promote")
-def promote_abtest(abtest_ID: str):
-    """
-    This endpoint allows to promote an abtest.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-    payload = request.get_json(force=True)
-
-    remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
-
-    if not remote_config:
-        return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
-
-    if not isinstance(payload.get("reference_value"), str):
-        return jsonify(error="`reference_value` should be str"), 400
-
-    try:
-        remote_config.promote_abtest(abtest_ID, payload["reference_value"])
-    except AssertionError as e:
-        return jsonify(error=str(e)), 400
-
-    return jsonify(), 204
-
-
-@remote_configs_endpoints.post("/conditions/<condition_ID>")
-def set_condition(condition_ID: str):
-    """
-    This endpoint allows to set remote config condition.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-    payload = request.get_json(force=True) | {"condition_ID": condition_ID}
-
-    try:
-        condition = RemoteConfigCondition(database, payload)
+        activated = payload["activated"]
+        assert isinstance(activated, bool), "`activated` should be boolean"
     except AssertionError as e:
         return jsonify(error=str(e)), 400
     except KeyError as e:
         return jsonify(error=f"Invalid payload : missing {e}"), 400
 
-    condition.update_database()
+    override = RemoteConfigOverride.from_database(
+        database, remote_config_name, audience_name
+    )
+    if not override:
+        return (
+            jsonify(
+                error=f"There is not remote config override with {remote_config_name} remote_config_name and {audience_name} audience_name."
+            ),
+            400,
+        )
+
+    if override.activated == activated:
+        return (
+            jsonify(
+                error=f"Remote config override has already activated field set to {activated}"
+            ),
+            400,
+        )
+
+    if override.override_type == "abtest" and not activated:
+        return (
+            jsonify(
+                error="You can NOT deactivate an abtest override, you should promote abtest."
+            ),
+            400,
+        )
+
+    override.activate(activated)
     return jsonify(), 204
+
+
+@remote_configs_endpoints.post("/<remote_config_name>/override/<audience_name>/promote")
+def promote_remote_config_override(remote_config_name: str, audience_name: str):
+    """
+    This endpoint promotes override for a remote config.
+    """
+    database: DynamoDBServiceResource = current_app.config["database"]
+    payload = request.get_json(force=True)
+
+    try:
+        activated = payload["activated"]
+        assert isinstance(activated, bool), "`activated` should be boolean"
+    except AssertionError as e:
+        return jsonify(error=str(e)), 400
+    except KeyError as e:
+        return jsonify(error=f"Invalid payload : missing {e}"), 400
+
+    override = RemoteConfigOverride.from_database(
+        database, remote_config_name, audience_name
+    )
+    if not override:
+        return (
+            jsonify(
+                error=f"There is not remote config override with {remote_config_name} remote_config_name and {audience_name} audience_name."
+            ),
+            400,
+        )
+
+    override.activate(activated)
+    return jsonify(), 204
+
+
+# @remote_configs_endpoints.post("/abtests/<abtest_ID>/promote")
+# def promote_abtest(abtest_ID: str):
+#     """
+#     This endpoint allows to promote an abtest.
+#     """
+#     database: DynamoDBServiceResource = current_app.config["database"]
+#     payload = request.get_json(force=True)
+
+#     remote_config = RemoteConfig.from_abtest_id(database, abtest_ID)
+
+#     if not remote_config:
+#         return jsonify(error=f"There is no ABTest with id `{abtest_ID}`"), 400
+
+#     if not isinstance(payload.get("reference_value"), str):
+#         return jsonify(error="`reference_value` should be str"), 400
+
+#     try:
+#         remote_config.promote_abtest(abtest_ID, payload["reference_value"])
+#     except AssertionError as e:
+#         return jsonify(error=str(e)), 400
+
+#     return jsonify(), 204

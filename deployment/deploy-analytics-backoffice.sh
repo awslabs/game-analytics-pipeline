@@ -10,7 +10,6 @@ echo "mkdir -p $analytics_backoffice_dist_dir"
 mkdir -p $analytics_backoffice_dist_dir
 
 rsync -av --exclude='.venv/' $source_dir/services/analytics-backoffice/* $analytics_backoffice_dist_dir >/dev/null
-sed -i '' s/%%ENVIRONMENT%%/$1/g $analytics_backoffice_dist_dir/zappa_settings.json
 sed -i '' s/%%AWS_REGION%%/$2/g $analytics_backoffice_dist_dir/zappa_settings.json
 sed -i '' s/%%PROJECT_NAME%%/$3/g $analytics_backoffice_dist_dir/zappa_settings.json
 sed -i '' s/%%GEODE_DOMAIN_NAME%%/$4/g $analytics_backoffice_dist_dir/zappa_settings.json
@@ -24,9 +23,9 @@ cd $analytics_backoffice_dist_dir
 python3 -m venv .venv --upgrade-deps
 source .venv/bin/activate
 pip install -r requirements.txt >/dev/null
-zappa deploy
+zappa deploy $1
 if [[ $? == 1 ]]; then
     echo "Applicaton already created, will update it"
-    zappa update
+    zappa update $1
 fi
 cd -
