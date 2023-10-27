@@ -6,6 +6,7 @@ from flask import Blueprint, current_app, jsonify, request
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
 from models.ABTest import ABTest
+from models.RemoteConfig import RemoteConfig
 from models.RemoteConfigOverride import RemoteConfigOverride
 
 
@@ -78,10 +79,7 @@ def promote_abtest(abtest_name: str):
         audience_name = payload["audience_name"]
         promoted_value = payload["promoted_value"]
     except KeyError as e:
-        return jsonify(error=f"Invalid paylaod : missing {e}"), 400
-
-    if promoted_value not in abtest.variants:
-        return jsonify(error=f"`promoted_value` not in {abtest.variants}"), 400
+        return jsonify(error=f"Invalid payload : missing {e}"), 400
 
     # Update override value
     override = RemoteConfigOverride.from_database(
@@ -97,6 +95,11 @@ def promote_abtest(abtest_name: str):
 
     if override.override_type != "abtest":
         return jsonify(error="This override is NOT an abtest"), 400
+
+    remote_config = RemoteConfig.from_name(database, remote_config_name)
+    possible_values = [remote_config.reference_value] + abtest.variants
+    if promoted_value not in possible_values:
+        return jsonify(error=f"`promoted_value` not in {possible_values}"), 400
 
     override.fix_value(promoted_value, abtest)
 

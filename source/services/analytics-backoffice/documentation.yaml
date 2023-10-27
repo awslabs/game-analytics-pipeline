@@ -7,12 +7,16 @@ info:
     - **[Production URL](https://api.geode.com/analytics-backoffice)**
 
 servers:
-- url: https://apidev.geode.com/analytics-backoffice/
+- url: https://apidev.geode.com/analytics-backoffice
 tags:
 - name: Applications
   description: Handle GEODE Analytics Applications
+- name: ABTests
+  description: Handle GEODE ABTests
+- name: Audiences
+  description: Handle GEODE Audiences
 - name: Remote Configs
-  description: Handle Remote Configs and ABTests
+  description: Handle GEODE Remote Configs and Overrides
 
 paths:
 
@@ -136,276 +140,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/errorResponse'
 
-  #  ----- Remote Configs ----------------------------------
+  #  ----- ABTests ----------------------------------
 
-  /remote-configs:
-    post:
-      summary: Create a Remote Config
-      description: This endpoint creates a remote config.
+  /abtests:
+    get:
+      summary: Get all ABTests
+      description: This endpoint returns all ABTests.
       tags:
-      - Remote Configs
-      requestBody:
-        description: |-
-          - You can't create 2 remote configs with the same `name`
-        required: true
-        content:
-          application/json:
-            schema:
-              required:
-              - description
-              - name
-              - reference_value
-              type: object
-              properties:
-                description:
-                  type: string
-                  example: This remote config allows to handle color button.
-                name:
-                  type: string
-                  example: ColorButton
-                reference_value:
-                  type: string
-                  example: Blue
+      - ABTests
       responses:
         200:
-          description: The remote config was created successfully
+          description: ABTests returned successfully.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  remote_config_ID:
-                    type: string
-                    example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
-        400:
-          description: The remote config has NOT been created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/errorResponse'
-
-  /remote-configs/{remote_config_ID}:
-    put:
-      summary: Update a Remote Config
-      description: This endpoint updates a remote config.
+                type: array
+                items:
+                  type: object
+  /abtests/{abtest_name}:
+    post:
+      summary: Set ABTest
+      description: This endpoint sets ABTest.
       tags:
-      - Remote Configs
+      - ABTests
       parameters:
-      - name: remote_config_ID
+      - name: abtest_name
         in: path
-        description: ID of the remote config
+        description: name of the ABTest
         required: true
         schema:
           type: string
-          example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
+          example: LightColors
       requestBody:
         description: |-
-          - you can't use a `name` that has already been used by another remote config
-          - You can't update `name` and `reference_value` if this remote config is activated.
-        required: true
-        content:
-          application/json:
-            schema:
-              required:
-              - description
-              - name
-              - reference_value
-              type: object
-              properties:
-                description:
-                  type: string
-                  example: This remote config allows to handle color button.
-                name:
-                  type: string
-                  example: ColorButton
-                reference_value:
-                  type: string
-                  example: Blue
-      responses:
-        204:
-          description: The remote config was updated successfully
-        400:
-          description: The remote config has NOT been updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/errorResponse'
-
-    delete:
-      summary: Delete a Remote Config
-      description: This endpoint deletes a remote config. You can't delete an activated remote config
-      tags:
-      - Remote Configs
-      parameters:
-      - name: remote_config_ID
-        in: path
-        description: ID of the remote config
-        required: true
-        schema:
-          type: string
-          example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
-      responses:
-        204:
-          description: The remote config was deleted successfully
-        400:
-          description: The remote config has NOT been deleted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/errorResponse'
-
-  /remote-configs/{remote_config_ID}/activate:
-    post:
-      summary: Activate a Remote Config
-      description: This endpoint activates a remote config.
-      tags:
-      - Remote Configs
-      parameters:
-      - name: remote_config_ID
-        in: path
-        description: ID of the remote config
-        required: true
-        schema:
-          type: string
-          example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
-      responses:
-        204:
-          description: The remote config was activated successfully
-
-  /remote-configs/{remote_config_ID}/condition/{condition_type}:
-    post:
-      summary: Set Remote Config Condition
-      description: This endpoint sets a condition for a remote config.
-      tags:
-      - Remote Configs
-      parameters:
-      - name: remote_config_ID
-        in: path
-        description: ID of the remote config
-        required: true
-        schema:
-          type: string
-          example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
-      - name: condition_type
-        in: path
-        description: Type of condition
-        required: true
-        schema:
-          type: string
-          enum:
-          - available_applications
-          - available_countries
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                condition_value:
-                  example: 'Can be anything: string, number, array, object, etc., excluding `null`'
-      responses:
-        204:
-          description: The condition was updated sucessfully
-    delete:
-      summary: Delete Remote Config Condition
-      description: This endpoint deletes a condition for a remote config.
-      tags:
-      - Remote Configs
-      parameters:
-      - name: remote_config_ID
-        in: path
-        description: ID of the remote config
-        required: true
-        schema:
-          type: string
-          example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
-      - name: condition_type
-        in: path
-        description: Type of condition
-        required: true
-        schema:
-          type: string
-          enum:
-          - available_applications
-          - available_countries
-      responses:
-        204:
-          description: The condition was deleted sucessfully
-
-  /remote-configs/{remote_config_ID}/abtest:
-    post:
-      summary: Create an ABTest
-      description: This endpoint creates an ABTest for a remote config
-      tags:
-      - Remote Configs
-      parameters:
-      - name: remote_config_ID
-        in: path
-        description: ID of the remote config
-        required: true
-        schema:
-          type: string
-          example: 7ca85fda-c5c5-4180-9207-f2971fca6e01
-      requestBody:
-        description: |-
-          - The same remote config cannot have 2 ABTests with the same `name`.
-
-          - `target_user_percent` must be between 0 ad 100
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  example: LightColors
-                target_user_percent:
-                  type: integer
-                  example: 100
-                variants:
-                  type: array
-                  items:
-                    type: string
-                  example:
-                  - Green
-                  - Yellow
-      responses:
-        200:
-          description: The ABTest has been created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  abtest_ID:
-                    type: string
-                    example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
-        400:
-          description: The remote config has NOT been created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/errorResponse'
-
-  /remote-configs/abtests/{abtest_ID}:
-    put:
-      summary: Update an ABTest
-      description: This endpoint updates an ABtest.
-      tags:
-      - Remote Configs
-      parameters:
-      - name: abtest_ID
-        in: path
-        description: ID of the ABTest
-        required: true
-        schema:
-          type: string
-          example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
-      requestBody:
-        description: |-
-          - You can't update an activated ABTest.
+          - `abtest_name` is the unique ABTest identifier.
+          - `target_user_percent` must be between 0 and 100.
         required: true
         content:
           application/json:
@@ -415,165 +184,404 @@ paths:
               - variants
               type: object
               properties:
-                name:
-                  type: string
-                  example: LightColors
                 target_user_percent:
                   type: integer
                   example: 100
                 variants:
                   type: array
-                  items:
+                  item:
                     type: string
                   example:
-                  - Red
-                  - Green
+                  - Blue
+                  - Yellow
       responses:
         204:
-          description: The ABTest was updated successfully
+          description: The ABTest was created/updated successfully.
         400:
-          description: The ABTest has NOT been updated because this ABTest is activated
+          description: The ABTest has NOT been created/updated.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorResponse'
-
     delete:
-      summary: Delete an ABTest
-      description: This endpoint deletes an ABTest. You can't delete an activated ABTest
+      summary: Delete ABTest
+      description: This endpoint deletes ABTest. You can't delete ABTest link with Remote Config Override.
       tags:
-      - Remote Configs
+      - ABTests
       parameters:
-      - name: abtest_ID
+      - name: abtest_name
         in: path
-        description: ID of the ABTest
+        description: name of the ABTest
         required: true
         schema:
           type: string
-          example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
+          example: LightColors
       responses:
         204:
-          description: The ABTest was deleted successfully
+          description: The ABTest was deleted successfully.
         400:
-          description: The ABTest has NOT been deleted because the ABTest is activated.
+          description: The ABTest has NOT been deleted.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/errorResponse'
-
-  /remote-configs/abtests/{abtest_ID}/activate:
+  /abtests/{abtest_name}/promote:
     post:
-      summary: Activate an ABTest
-      description: |-
-        This endpoint activates an ABTest. You can active an ABTest only if :
-        - his remote config is activate
-        - there isn't another ABTest already activated on this remote config
+      summary: Promote ABTest
+      description: This endpoint promotes ABTest. It promotes value to Remote Config Override Audience. If Audience is ALL, it replaces reference_value of Remote Config.
       tags:
-      - Remote Configs
+      - ABTests
       parameters:
-      - name: abtest_ID
+      - name: abtest_name
         in: path
-        description: ID of the ABTest
+        description: name of the ABTest
         required: true
         schema:
           type: string
-          example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
+          example: LightColors
       requestBody:
         description: |-
-          - `start_timestamp` is optional. It must be greater than the current timestamp. Its default value is the current timestamp.
+          - `promoted_value` should be reference_value of Remote Config or a variant of ABTest.
         required: true
         content:
           application/json:
             schema:
               required:
-              - start_timestamp
-              type: object
-              properties:
-                start_timestamp:
-                  type: integer
-                  example: 1692794054
-      responses:
-        204:
-          description: The ABTest was activated successfully
-        400:
-          description: The ABTest has NOT been activated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/errorResponse'
-
-  /remote-configs/abtests/{abtest_ID}/pause:
-    post:
-      summary: Pause an ABTest
-      description: |-
-        - This endpoint pauses an ABTest
-        - You can only pause an activated ABTest.
-      tags:
-      - Remote Configs
-      parameters:
-      - name: abtest_ID
-        in: path
-        description: ID of the ABTest
-        required: true
-        schema:
-          type: string
-          example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              required:
-              - paused
-              type: object
-              properties:
-                paused:
-                  type: boolean
-      responses:
-        204:
-          description: The ABTest has been paused
-        400:
-          description: The ABTest has NOT been paused
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/errorResponse'
-
-  /remote-configs/abtests/{abtest_ID}/promote:
-    post:
-      summary: Promote an ABTest
-      description: This endpoint promotes an ABTest by selecting the new reference_value
-      tags:
-      - Remote Configs
-      parameters:
-      - name: abtest_ID
-        in: path
-        description: ID of the ABTest
-        required: true
-        schema:
-          type: string
-          example: 3bb3e26e-8b88-4b37-b8c6-b5d5e9090eaa
-      requestBody:
-        description: |-
-          - You can only promote an activated ABTest.
-
-          - `promoted_value` should be reference_value of a variant
-        required: true
-        content:
-          application/json:
-            schema:
-              required:
+              - remote_config_name
+              - audience_name
               - promoted_value
               type: object
               properties:
+                remote_config_name:
+                  type: string
+                  example: ColorButton
+                audience_name:
+                  type: string
+                  example: ONLY_FR
                 promoted_value:
-                  type: integer
-                  example: 1692794054
+                  type: string
+                  example: Blue
       responses:
         204:
-          description: The reference_value of the remote config has been replaced by promoted_value
+          description: The ABTest was promoted successfully.
         400:
-          description: The ABTest has NOT been promoted
+          description: The ABTest has NOT been promoted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+  #  ----- Audience ----------------------------------
+
+  /audiences:
+    get:
+      summary: Get all Audiences
+      description: This endpoint returns all Audiences.
+      tags:
+      - Audiences
+      responses:
+        200:
+          description: Audiences returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+  /audiences/{audience_name}:
+    post:
+      summary: Set Audience
+      description: This endpoint sets Audience.
+      tags:
+      - Audiences
+      parameters:
+      - name: audience_name
+        in: path
+        description: name of the Audience
+        required: true
+        schema:
+          type: string
+          example: ONLY_FR
+      requestBody:
+        description: |-
+          - `promoted_value` should be reference_value of Remote Config or a variant of ABTest.
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+              - condition_type
+              - condition_value
+              - description
+              type: object
+              properties:
+                condition_type:
+                  type: string
+                  example: target_countries
+                condition_value:
+                  type: string
+                  example: "Should be Any type"
+                description:
+                  type: string
+                  example: This Audience targets only French players
+      responses:
+        204:
+          description: The Audience was created/updated successfully.
+        400:
+          description: The Audience has NOT been created/updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+    delete:
+      summary: Delete Audience
+      description: This endpoint deletes Audience.
+      tags:
+      - Audiences
+      parameters:
+      - name: audience_name
+        in: path
+        description: name of the Audience
+        required: true
+        schema:
+          type: string
+          example: ONLY_FR
+      responses:
+        204:
+          description: The Audience was deleted successfully.
+        400:
+          description: The Audience has NOT been deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+
+  #  ----- Remote Configs ----------------------------------
+
+  /remote-configs:
+    get:
+      summary: Get all Remote Configs
+      description: This endpoint returns all Remote Configs.
+      tags:
+      - Remote Configs
+      responses:
+        200:
+          description: Remote Configs returned successfully.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+  /remote-configs/{remote_config_name}:
+    post:
+      summary: Set Remote Config
+      description: This endpoint sets Remote Config.
+      tags:
+      - Remote Configs
+      parameters:
+      - name: remote_config_name
+        in: path
+        description: name of the Remote Config
+        required: true
+        schema:
+          type: string
+          example: ColorButton
+      requestBody:
+        description: |-
+          - `remote_config_name` is the unique Remote Config identifier.
+          - You can't update actived Remote Config
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+              - description
+              - reference_value
+              type: object
+              properties:
+                description:
+                  type: string
+                  example: This Remote Config allows to handle color button.
+                reference_value:
+                  type: string
+                  example: Blue
+      responses:
+        204:
+          description: The Remote Config was created/updated successfully.
+        400:
+          description: The Remote Config has NOT been created/updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+    delete:
+      summary: Delete Remote Config
+      description: This endpoint deletes Remote Config. You can't delete actived Remote Config.
+      tags:
+      - Remote Configs
+      parameters:
+      - name: remote_config_name
+        in: path
+        description: name of the Remote Config
+        required: true
+        schema:
+          type: string
+          example: ColorButton
+      responses:
+        204:
+          description: The Remote Config was deleted successfully.
+        400:
+          description: The Remote Config has NOT been deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+
+  /remote-configs/{remote_config_name}/activate:
+    post:
+      summary: Activate Remote Config
+      description: This endpoint activates Remote Config. You can't deactivate Remote Config.
+      tags:
+      - Remote Configs
+      parameters:
+      - name: remote_config_name
+        in: path
+        description: name of the Remote Config
+        required: true
+        schema:
+          type: string
+          example: ColorButton
+      responses:
+        204:
+          description: The Remote Config was created/updated successfully.
+        400:
+          description: The Remote Config has NOT been created/updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+
+  /remote-configs/{remote_config_name}/override/{audience_name}:
+    post:
+      summary: Set Remote Config Override
+      description: This endpoint sets Override for a Remote Config based on an Audience. If user matches all Audience conditions, it will retrieve override_value instead of reference_value, ONLY if override_type == fixed. If override_type == abtest, override_value should be abtest_name.
+      tags:
+      - Remote Configs
+      parameters:
+      - name: remote_config_name
+        in: path
+        description: name of the Remote Config
+        required: true
+        schema:
+          type: string
+          example: ColorButton
+      - name: audience_name
+        in: path
+        description: name of the Audience
+        required: true
+        schema:
+          type: string
+          example: ONLY_FR
+      requestBody:
+        description: |-
+          - You can't update actived Remote Config Override
+          - You can't link ABTest to multiple Remote Config Override
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+              - override_type
+              - override_value
+              type: object
+              properties:
+                override_type:
+                  type: string
+                  enum:
+                  - abtest
+                  - fixed
+                override_value:
+                  type: string
+                  example: LightColors
+      responses:
+        204:
+          description: The Remote Config Override was created/updated successfully.
+        400:
+          description: The Remote Config Override has NOT been created/updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+    delete:
+      summary: Delete Remote Config Override
+      description: This endpoint deletes Override for a Remote Config based on an Audience. You can't delete activated Remote Config Override.
+      tags:
+      - Remote Configs
+      parameters:
+      - name: remote_config_name
+        in: path
+        description: name of the Remote Config
+        required: true
+        schema:
+          type: string
+          example: ColorButton
+      - name: audience_name
+        in: path
+        description: name of the Audience
+        required: true
+        schema:
+          type: string
+          example: ONLY_FR
+      responses:
+        204:
+          description: The Remote Config Override was deleted successfully.
+        400:
+          description: The Remote Config Override has NOT been deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+
+  /remote-configs/{remote_config_name}/override/{audience_name}/activate:
+    post:
+      summary: Activate Remote Config Override
+      description: This endpoint activates Override for a Remote Config based on an Audience.
+      tags:
+      - Remote Configs
+      parameters:
+      - name: remote_config_name
+        in: path
+        description: name of the Remote Config
+        required: true
+        schema:
+          type: string
+          example: ColorButton
+      - name: audience_name
+        in: path
+        description: name of the Audience
+        required: true
+        schema:
+          type: string
+          example: ONLY_FR
+      requestBody:
+        description: |-
+          - If override_type == fixed, you can deactivate Remote Config Override. It will be added to the Remote Configs Override History.
+          - If override_type == abtest, you can't deactivate Remote Config Override. You need to call the endpoint /abtests/{abtest_name}/promote
+        required: true
+        content:
+          application/json:
+            schema:
+              required:
+              - activated
+              type: object
+              properties:
+                activated:
+                  type: boolean
+      responses:
+        204:
+          description: The Remote Config Override was activated successfully.
+        400:
+          description: The Remote Config Override has NOT been activated.
           content:
             application/json:
               schema:
