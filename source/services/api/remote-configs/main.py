@@ -1,24 +1,18 @@
 """
 Lambda handler
 """
-import os
-import random
 from typing import Any
 
 import boto3
-from boto3.dynamodb.conditions import Attr, Key
 
-from RemoteConfigConditions import RemoteConfigConditions
+from models.ABTest import ABTest
+from models.Audience import Audience
+from models.RemoteConfig import RemoteConfig
+from models.RemoteConfigOverride import RemoteConfigOverride
+from models.UserABTest import UserABTest
 
 
 dynamodb = boto3.resource("dynamodb")
-
-abtests_table = dynamodb.Table(os.environ["ABTESTS_TABLE"])
-remote_configs_table = dynamodb.Table(os.environ["REMOTE_CONFIGS_TABLE"])
-remote_configs_conditions_table = dynamodb.Table(
-    os.environ["REMOTE_CONFIGS_CONDITIONS_TABLE"]
-)
-users_abtests_table = dynamodb.Table(os.environ["USERS_ABTESTS_TABLE"])
 
 
 def handler(event: dict, context: dict):
@@ -34,83 +28,52 @@ def handler(event: dict, context: dict):
 
     remote_configs = {}
 
-    for remote_config in __get_active_remote_configs():
-        remote_config_ID = remote_config["ID"]
-        value = remote_config["reference_value"]
-        value_origin = "reference_value"
+    # NEW
 
-        if override_value := __override_value(remote_config_ID, user_data):
-            remote_configs[remote_config["name"]] = {
-                "value": override_value,
-                "value_origin": value_origin,
+    for remote_config in RemoteConfig.get_actives(dynamodb):
+        overrides = RemoteConfigOverride.get_actives(
+            dynamodb, remote_config.remote_config_name
+        )
+        if not overrides:
+            remote_configs[remote_config.remote_config_name] = {
+                "value": remote_config.reference_value,
+                "value_origin": "reference_value",
             }
             continue
 
-        if abtest := __get_active_abtest(remote_config_ID):
-
-            if user_abtest := __get_user_abtest(user_ID, abtest["ID"]):
-                value = user_abtest["value"]
-                value_origin = (
-                    "abtest"
-                    if user_abtest["is_in_test"]
-                    else "reference_value"
-                )
-
-            else:
-                is_in_test = random.randint(0, 99) < abtest.get("target_user_percent")
-                value_origin = "abtest" if is_in_test else "reference_value"
-
-                if is_in_test:
-                    choices = [remote_config.get("reference_value")] + abtest.get(
-                        "variants", []
-                    )
-                    value = random.choice(choices)
-
-                users_abtests_table.put_item(
-                    Item={
-                        "uid": user_ID,
-                        "abtest_ID": abtest.get("ID"),
-                        "is_in_test": is_in_test,
-                        "value": value,
+        for override in overrides:
+            if __match_audience(override.audience_name, user_data):
+                if override.override_type == "fixed":
+                    remote_configs[remote_config.remote_config_name] = {
+                        "value": override.override_value,
+                        "value_origin": "reference_value",
                     }
-                )
+                    break
 
-        remote_configs[remote_config["name"]] = {
-            "value": value,
-            "value_origin": value_origin,
-        }
+                # override_type == abtest
+                abtest = ABTest(dynamodb, override.override_value)
+                user_abtest = UserABTest(dynamodb, user_ID, abtest)
+
+                if not user_abtest.exists:
+                    user_abtest.set_group(remote_config.reference_value)
+
+                remote_configs[remote_config.remote_config_name] = {
+                    "value": user_abtest.value,
+                    "value_origin": "abtest"
+                    if user_abtest.is_in_test
+                    else "reference_value",
+                }
+                break
+        else:
+            # No audience matches, we give the reference_value
+            remote_configs[remote_config.remote_config_name] = {
+                "value": remote_config.reference_value,
+                "value_origin": "reference_value",
+            }
 
     return remote_configs
 
-def __override_value(remote_config_ID: str, user_data: dict[str, Any]) -> Any | None:
-    response = dynamodb.Table(os.environ["REMOTE_CONFIGS_OVERRIDE_TABLE"]).query(
-        KeyConditionExpression=Key("remote_config_ID").eq(remote_config_ID)
-    )
-    for item in response["Items"]:
-        conditions = RemoteConfigConditions(
-            dynamodb, item["condition_ID"], user_data
-        )
-        if conditions.application_available and conditions.country_available:
-            return item["override_value"]
 
-def __get_active_abtest(remote_config_ID: str):
-    response = abtests_table.query(
-        IndexName="active-index",
-        KeyConditionExpression=Key("active").eq(1),
-        FilterExpression=Attr("remote_config_ID").eq(remote_config_ID)
-        & Attr("paused").eq(False),
-    )
-    return next(iter(response["Items"]), None)
-
-def __get_active_remote_configs():
-    response = remote_configs_table.query(
-        IndexName="active-index",
-        KeyConditionExpression=Key("active").eq(1),
-    )
-    return response["Items"]
-
-def __get_user_abtest(user_ID: str, abtest_ID: str):
-    response = users_abtests_table.get_item(
-        Key={"uid": user_ID, "abtest_ID": abtest_ID}
-    )
-    return response.get("Item")
+def __match_audience(audience_name: str, user_data: dict[str, Any]) -> bool:
+    audience = Audience(dynamodb, audience_name, user_data)
+    return audience.target_applications and audience.target_countries

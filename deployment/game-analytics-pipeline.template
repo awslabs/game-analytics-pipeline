@@ -224,9 +224,9 @@ Resources:
       Environment:
         Variables:
           ABTESTS_TABLE: !Ref ABTestsTable
+          AUDIENCES_TABLE: !Ref AudiencesTable
           REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
-          AUDIENCE_TABLE: !Ref AudiencesTable
-          REMOTE_CONFIGS_OVERRIDE_TABLE: !Ref RemoteConfigsOverridesTable
+          REMOTE_CONFIGS_OVERRIDES_TABLE: !Ref RemoteConfigsOverridesTable
           USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
           CACHE_TIMEOUT_SECONDS: 60
       Policies:
@@ -1348,11 +1348,20 @@ Resources:
       AttributeDefinitions:
         - AttributeName: remote_config_name
           AttributeType: S
+        - AttributeName: active
+          AttributeType: N
       KeySchema:
         - AttributeName: remote_config_name
           KeyType: HASH
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
+      GlobalSecondaryIndexes:
+        - IndexName: active-index
+          KeySchema:
+            - AttributeName: active
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
@@ -1373,6 +1382,13 @@ Resources:
           KeyType: HASH
         - AttributeName: condition_type
           KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: audience_name-index
+          KeySchema:
+            - AttributeName: audience_name
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
@@ -1410,12 +1426,22 @@ Resources:
           AttributeType: S
         - AttributeName: override_type
           AttributeType: S
+        - AttributeName: active
+          AttributeType: N
       KeySchema:
         - AttributeName: remote_config_name
           KeyType: HASH
         - AttributeName: audience_name
           KeyType: RANGE
       GlobalSecondaryIndexes:
+        - IndexName: remote_config_name-active-index
+          KeySchema:
+            - AttributeName: remote_config_name
+              KeyType: HASH
+            - AttributeName: active
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
         - IndexName: audience_name-index
           KeySchema:
             - AttributeName: audience_name
