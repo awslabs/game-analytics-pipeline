@@ -1348,20 +1348,11 @@ Resources:
       AttributeDefinitions:
         - AttributeName: remote_config_name
           AttributeType: S
-        - AttributeName: active
-          AttributeType: N
       KeySchema:
         - AttributeName: remote_config_name
           KeyType: HASH
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
-      GlobalSecondaryIndexes:
-        - IndexName: active-index
-          KeySchema:
-            - AttributeName: active
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS

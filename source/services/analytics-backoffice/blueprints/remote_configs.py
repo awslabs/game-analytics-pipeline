@@ -37,49 +37,7 @@ def set_remote_config(remote_config_name: str):
     except AssertionError as e:
         return jsonify(error=str(e)), 400
 
-    if remote_config.activated:
-        return jsonify(error="You can NOT update activated remote config"), 400
-
     remote_config.update_database()
-    return jsonify(), 204
-
-
-@remote_configs_endpoints.delete("/<remote_config_name>")
-def delete_remote_config(remote_config_name: str):
-    """
-    This endpoint deletes a remote config.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-
-    remote_config = RemoteConfig.from_name(database, remote_config_name)
-    if not remote_config:
-        return (
-            jsonify(error=f"There is no remote config with name {remote_config_name}"),
-            400,
-        )
-
-    if remote_config.activated:
-        return jsonify(error="You can NOT delete activated remote config"), 400
-
-    remote_config.delete()
-    return jsonify(), 204
-
-
-@remote_configs_endpoints.post("/<remote_config_name>/activate")
-def activate_remote_config(remote_config_name: str):
-    """
-    This endpoint activates a remote config.
-    """
-    database: DynamoDBServiceResource = current_app.config["database"]
-
-    remote_config = RemoteConfig.from_name(database, remote_config_name)
-    if not remote_config:
-        return (
-            jsonify(error=f"There is no remote config with name {remote_config_name}"),
-            400,
-        )
-
-    remote_config.activate()
     return jsonify(), 204
 
 

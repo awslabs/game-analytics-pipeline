@@ -3,7 +3,6 @@ This module contains RemoteConfig class.
 """
 from typing import Any, List
 
-from boto3.dynamodb.conditions import Key
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
 from utils import constants
@@ -22,10 +21,7 @@ class RemoteConfig:
         """
         This method returns actived RemoteConfigs
         """
-        response = dynamodb.Table(constants.REMOTE_CONFIGS_TABLE).query(
-            IndexName="active-index",
-            KeyConditionExpression=Key("active").eq(1),
-        )
+        response = dynamodb.Table(constants.REMOTE_CONFIGS_TABLE).scan()
         return [RemoteConfig(item) for item in response["Items"]]
 
     @property

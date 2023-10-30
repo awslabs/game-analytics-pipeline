@@ -49,26 +49,6 @@ class RemoteConfig:
         return "Item" in response
 
     @property
-    def activated(self) -> bool:
-        """
-        This method returns True if the RemoteConfig is activated else False.
-        """
-        return self.active == 1
-
-    @property
-    def active(self) -> int:
-        """
-        This method returns 1 if the RemoteConfig is activated else 0.
-        """
-        if "active" not in self.__data:
-            # Check if this remote Config already exists in database.
-            response = self.__database.Table(constants.TABLE_REMOTE_CONFIGS).get_item(
-                Key={"remote_config_name": self.remote_config_name}
-            )
-            self.__data["active"] = response.get("Item", {}).get("active", 0)
-        return self.__data["active"]
-
-    @property
     def description(self) -> str:
         """
         This method returns description.
@@ -88,17 +68,6 @@ class RemoteConfig:
         This method returns remote_config_name.
         """
         return self.__data["remote_config_name"]
-
-    def activate(self):
-        """
-        This method activates RemoteConfig in database.
-        """
-        self.__database.Table(constants.TABLE_REMOTE_CONFIGS).update_item(
-            Key={"remote_config_name": self.remote_config_name},
-            AttributeUpdates={
-                "active": {"Value": 1, "Action": "PUT"},
-            },
-        )
 
     def delete(self):
         """
@@ -121,7 +90,6 @@ class RemoteConfig:
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS).put_item(
             Item={
                 "remote_config_name": self.remote_config_name,
-                "active": self.active,
                 "description": self.description,
                 "reference_value": self.reference_value,
             }
