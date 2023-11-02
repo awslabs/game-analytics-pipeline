@@ -2,7 +2,7 @@
 This module lambda assigns audiences to users.
 """
 from datetime import datetime, timedelta
-from time import sleep
+from time import sleep, time
 
 import boto3
 
@@ -33,8 +33,8 @@ def handler(event: dict, context: dict):
                 SELECT DISTINCT(json_extract_scalar(user, '$.user_id'))
                 FROM {constants.ANALYTICS_TABLE}
                 WHERE ({audience['condition']})
-                    AND year>='{yesterday.year}
-                    AND month>='{str(yesterday.month).zfill(2)}
+                    AND year>='{yesterday.year}'
+                    AND month>='{str(yesterday.month).zfill(2)}'
                     AND day>='{str(yesterday.day).zfill(2)}'
             """,
             QueryExecutionContext={"Database": constants.ANALYTICS_DATABASE},
@@ -72,6 +72,13 @@ def handler(event: dict, context: dict):
         )
 
     print(f"Filling the {constants.USERS_AUDIENCES_TABLE} table in progress...")
+    expires_timestamp = int(time()) + (60 * 60 * 24 * 30)  # 30 days
     with dynamodb.Table(constants.USERS_AUDIENCES_TABLE).batch_writer() as batch:
         for uid, audience_name in users_audiences:
-            batch.put_item(Item={"uid": uid, "audience_name": audience_name})
+            batch.put_item(
+                Item={
+                    "uid": uid,
+                    "audience_name": audience_name,
+                    "expires_timestamp": expires_timestamp,
+                }
+            )

@@ -303,23 +303,19 @@ paths:
           example: ONLY_FR
       requestBody:
         description: |-
-          - `promoted_value` should be reference_value of Remote Config or a variant of ABTest.
+          - `condition` will be injected in WHERE clause of Athena query.
         required: true
         content:
           application/json:
             schema:
               required:
-              - condition_type
-              - condition_value
+              - condition
               - description
               type: object
               properties:
-                condition_type:
+                condition:
                   type: string
-                  example: target_countries
-                condition_value:
-                  type: string
-                  example: "Should be Any type"
+                  example: json_extract_scalar(user, '$.country')='FR'
                 description:
                   type: string
                   example: This Audience targets only French players
