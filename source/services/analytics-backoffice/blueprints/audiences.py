@@ -47,16 +47,10 @@ def delete_audience(audience_name: str):
     """
     database: DynamoDBServiceResource = current_app.config["database"]
 
-    condition_type = request.args.get("condition_type")
-    if not condition_type:
-        return jsonify(error="Missing `condition_type` query parameters"), 400
-
-    audience = Audience.from_database(database, audience_name, condition_type)
+    audience = Audience.from_database(database, audience_name)
     if not audience:
         return (
-            jsonify(
-                error=f"There is no audience with {audience_name} audience_name and {condition_type} condition_type"
-            ),
+            jsonify(error=f"There is no audience with {audience_name} audience_name"),
             400,
         )
 
@@ -64,7 +58,10 @@ def delete_audience(audience_name: str):
         database, audience_name
     )
     if len(remote_configs_overrides) > 0:
-        return jsonify(error="You can NOT remove used audience"), 400
+        return (
+            jsonify(error="You can NOT delete audience : it used in Remote Overrides"),
+            400,
+        )
 
     audience.delete()
     return jsonify(), 204

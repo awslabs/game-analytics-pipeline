@@ -1,7 +1,7 @@
 """
-This module contains RemoteConfigConditions class.
+This module contains Audience class.
 """
-from typing import Any
+from typing import Any, List
 from boto3.dynamodb.conditions import Key
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
@@ -13,33 +13,25 @@ class Audience:
     This class represents an audience.
     """
 
-    def __init__(
-        self,
-        dynamodb: DynamoDBServiceResource,
-        audience_name: str,
-        user_data: dict[str, Any],
-    ):
-        response = dynamodb.Table(constants.AUDIENCES_TABLE).query(
-            IndexName="audience_name-index",
-            KeyConditionExpression=Key("audience_name").eq(audience_name),
+    def __init__(self, data: dict[str, Any]):
+        self.__data = data
+
+    @staticmethod
+    def get_users_audiences(
+        dynamodb: DynamoDBServiceResource, uid: str
+    ) -> List["Audience"]:
+        """
+        This static method returns a list of all Audiences for uid.
+        """
+        response = dynamodb.Table(constants.USERS_AUDIENCES_TABLE).query(
+            IndexName="uid-index", KeyConditionExpression=Key("uid").eq(uid)
         )
-        self.__conditions = {item["condition_type"]: item["condition_value"] for item in response["Items"]}
-        self.__user_data = user_data
+
+        return [Audience(item) for item in response["Items"]]
 
     @property
-    def target_applications(self) -> bool:
+    def audience_name(self) -> str:
         """
-        This method checks if remote config is available for user application.
+        This property returns audience_name.
         """
-        if target_applications := self.__conditions.get("target_applications"):
-            return self.__user_data["application_ID"] in target_applications
-        return True
-
-    @property
-    def target_countries(self) -> bool:
-        """
-        This method checks if remote config is available for user country.
-        """
-        if target_countries := self.__conditions.get("target_countries"):
-            return self.__user_data["country"] in target_countries
-        return True
+        return self.__data["audience_name"]

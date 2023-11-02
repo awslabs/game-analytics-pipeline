@@ -92,13 +92,27 @@ echo "Packaging Lambda Function - Remote Configs service"
 echo "------------------------------------------------------------------------------"  
 cd $source_dir/services/api/remote-configs
 rm -r dist 2>/dev/null
-rsync -av --exclude=.venv/ --exclude=dist/ --exclude=.pylintrc * dist >/dev/null
+rsync -av --exclude=.venv/ --exclude=.pylintrc * dist >/dev/null
 cd dist
-python3 -m venv .venv --upgrade-deps
+python3.11 -m venv .venv --upgrade-deps
 source .venv/bin/activate
 pip install -r requirements.txt --target . >/dev/null
 zip -r remote-configs.zip . >/dev/null
 cp remote-configs.zip $build_dist_dir/remote-configs.zip
+deactivate
+
+echo "------------------------------------------------------------------------------"  
+echo "Packaging Lambda Function - Users Audiences service"  
+echo "------------------------------------------------------------------------------"  
+cd $source_dir/services/users-audiences
+rm -r dist 2>/dev/null
+rsync -av --exclude=.venv/ --exclude=.pylintrc * dist >/dev/null
+cd dist
+python3.11 -m venv .venv --upgrade-deps
+source .venv/bin/activate
+pip install -r requirements.txt --target . >/dev/null
+zip -r users-audiences.zip . >/dev/null
+cp users-audiences.zip $build_dist_dir/users-audiences.zip
 deactivate
 
 echo "------------------------------------------------------------------------------"  

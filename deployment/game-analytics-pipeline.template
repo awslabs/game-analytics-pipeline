@@ -44,6 +44,7 @@ Mappings:
       RetentionInDays: 30
   JobScheduleSettings:
     ScheduledJobIntervals:
+      EveryMinute: 'cron(* * * * ? *)'
       Every1Hour: 'cron(0 */1 * * ? *)'
       EveryDay: 'cron(00 00 * * ? *)'
   GlueSettings:
@@ -228,6 +229,7 @@ Resources:
           REMOTE_CONFIGS_TABLE: !Ref RemoteConfigsTable
           REMOTE_CONFIGS_OVERRIDES_TABLE: !Ref RemoteConfigsOverridesTable
           USERS_ABTESTS_TABLE: !Ref UsersABTestsTable
+          USERS_AUDIENCES_TABLE: !Ref UsersAudiencesTable
           CACHE_TIMEOUT_SECONDS: 60
       Policies:
         Version: 2012-10-17
@@ -261,6 +263,8 @@ Resources:
               - !Sub ${RemoteConfigsOverridesTable.Arn}/index/*
               - !GetAtt UsersABTestsTable.Arn
               - !Sub ${UsersABTestsTable.Arn}/index/*
+              - !GetAtt UsersAudiencesTable.Arn
+              - !Sub ${UsersAudiencesTable.Arn}/index/*
     Metadata:
       cfn_nag:
         rules_to_suppress:
@@ -273,6 +277,131 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/${RemoteConfigsFunction}'
+      RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
+
+  UsersAudiencesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-UsersAudiencesFunction'
+      Handler: main.handler
+      Description: 'Function that attributes audiences to users'
+      Runtime: python3.11
+      CodeUri: 
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "users-audiences.zip"]]
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          ANALYTICS_BUCKET: !Ref AnalyticsBucket
+          ANALYTICS_DATABASE: !Ref GameEventsDatabase
+          ANALYTICS_TABLE: !FindInMap [GlueSettings, LocationS3Prefix, RawEventsS3Prefix]
+          AUDIENCES_TABLE: !Ref AudiencesTable
+          USERS_AUDIENCES_TABLE: !Ref UsersAudiencesTable
+      Events:
+        AudienceCalculation:
+          Type: Schedule
+          Properties:
+            Schedule: !FindInMap [JobScheduleSettings, ScheduledJobIntervals, EveryMinute]
+      Role: !GetAtt UsersAudiencesRole.Arn
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+
+  UsersAudiencesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-UsersAudiencesRole'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+      - PolicyName: UsersAudiencesPolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Sid: CWLogs
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutDestination
+                - logs:PutLogEvents
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+            - Sid: DynamoDBAccess
+              Effect: Allow
+              Action:
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:GetRecords
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                - !GetAtt AudiencesTable.Arn
+                - !Sub ${AudiencesTable.Arn}/index/*
+                - !GetAtt UsersAudiencesTable.Arn
+                - !Sub ${UsersAudiencesTable.Arn}/index/*
+            - Sid: GlueAccess
+              Effect: Allow
+              Action:
+                - glue:GetDatabases
+                - glue:GetTable
+                - glue:GetPartition
+                - glue:GetPartitions
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
+            - Sid: AthenaAccess
+              Effect: Allow
+              Action:
+                - athena:StartQueryExecution
+                - athena:GetQueryExecution
+                - athena:GetQueryResults
+              Resource:
+                - '*'
+            - Sid: S3Access
+              Effect: Allow
+              Action:
+                - s3:GetBucketLocation
+                - s3:GetObject
+                - s3:ListBucket
+                - s3:ListBucketMultipartUploads
+                - s3:AbortMultipartUpload
+                - s3:PutObject
+                - s3:ListMultipartUploadParts
+              Resource:
+                - !GetAtt AnalyticsBucket.Arn
+                - !Sub ${AnalyticsBucket.Arn}/*
+            - Sid: KmsAccess
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:Encrypt
+                - kms:GenerateDataKey
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/glue'
+
+  UsersAudiencesFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${UsersAudiencesFunction}'
       RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
     Metadata:
       cfn_nag:
@@ -1366,20 +1495,9 @@ Resources:
       AttributeDefinitions:
         - AttributeName: audience_name
           AttributeType: S
-        - AttributeName: condition_type
-          AttributeType: S
       KeySchema:
         - AttributeName: audience_name
           KeyType: HASH
-        - AttributeName: condition_type
-          KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: audience_name-index
-          KeySchema:
-            - AttributeName: audience_name
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
@@ -1417,20 +1535,16 @@ Resources:
           AttributeType: S
         - AttributeName: override_type
           AttributeType: S
-        - AttributeName: active
-          AttributeType: N
       KeySchema:
         - AttributeName: remote_config_name
           KeyType: HASH
         - AttributeName: audience_name
           KeyType: RANGE
       GlobalSecondaryIndexes:
-        - IndexName: remote_config_name-active-index
+        - IndexName: remote_config_name-index
           KeySchema:
             - AttributeName: remote_config_name
               KeyType: HASH
-            - AttributeName: active
-              KeyType: RANGE
           Projection:
             ProjectionType: ALL
         - IndexName: audience_name-index
@@ -1499,6 +1613,40 @@ Resources:
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
+
+  UsersAudiencesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      TableName: !Sub '${AWS::StackName}-users-audiences'
+      AttributeDefinitions:
+        - AttributeName: uid
+          AttributeType: S
+        - AttributeName: audience_name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: uid
+          KeyType: HASH
+        - AttributeName: audience_name
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+      - IndexName: uid-index
+        KeySchema:
+          - AttributeName: uid
+            KeyType: HASH
+        Projection:
+          ProjectionType: INCLUDE
+          NonKeyAttributes:
+            - uid
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      TimeToLiveSpecification:
+        AttributeName: expires_timestamp
+        Enabled: true
   
   
   ####################
@@ -2085,7 +2233,6 @@ Resources:
                   application/json: !Sub >
                     {
                       "applicationId": "$input.params('applicationId')",
-                      "country": "$input.params('CloudFront-Viewer-Country')",
                       "userId": "$input.params('userId')"
                     }
                 responses:

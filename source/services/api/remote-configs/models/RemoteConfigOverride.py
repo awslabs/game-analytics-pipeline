@@ -3,9 +3,10 @@ This module contains RemoteConfigOverride class.
 """
 from typing import Any, List
 
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
+from models.Audience import Audience
 from utils import constants
 
 
@@ -18,16 +19,19 @@ class RemoteConfigOverride:
         self.__data = data
 
     @staticmethod
-    def get_actives(
-        dynamodb: DynamoDBServiceResource, remote_config_name
+    def filter_audiences(
+        dynamodb: DynamoDBServiceResource,
+        remote_config_name: str,
+        audiences: list[Audience],
     ) -> List["RemoteConfigOverride"]:
         """
         This method returns actived RemoteConfigOverride.
         """
+        audience_names = [audience.audience_name for audience in audiences]
         response = dynamodb.Table(constants.REMOTE_CONFIGS_OVERRIDES_TABLE).query(
-            IndexName="remote_config_name-active-index",
-            KeyConditionExpression=Key("remote_config_name").eq(remote_config_name)
-            & Key("active").eq(1),
+            IndexName="remote_config_name-index",
+            KeyConditionExpression=Key("remote_config_name").eq(remote_config_name),
+            FilterExpression=Attr("audience_name").is_in(audience_names),
         )
         return [RemoteConfigOverride(item) for item in response["Items"]]
 

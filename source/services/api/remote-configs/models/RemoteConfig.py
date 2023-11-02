@@ -17,9 +17,9 @@ class RemoteConfig:
         self.__data = data
 
     @staticmethod
-    def get_actives(dynamodb: DynamoDBServiceResource) -> List["RemoteConfig"]:
+    def get_all(dynamodb: DynamoDBServiceResource) -> List["RemoteConfig"]:
         """
-        This method returns actived RemoteConfigs
+        This method returns all RemoteConfigs.
         """
         response = dynamodb.Table(constants.REMOTE_CONFIGS_TABLE).scan()
         return [RemoteConfig(item) for item in response["Items"]]

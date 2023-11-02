@@ -389,7 +389,6 @@ paths:
       requestBody:
         description: |-
           - `remote_config_name` is the unique Remote Config identifier.
-          - You can't update actived Remote Config
         required: true
         content:
           application/json:
@@ -405,52 +404,6 @@ paths:
                 reference_value:
                   type: string
                   example: Blue
-      responses:
-        204:
-          description: The Remote Config was created/updated successfully.
-        400:
-          description: The Remote Config has NOT been created/updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/errorResponse'
-    delete:
-      summary: Delete Remote Config
-      description: This endpoint deletes Remote Config. You can't delete actived Remote Config.
-      tags:
-      - Remote Configs
-      parameters:
-      - name: remote_config_name
-        in: path
-        description: name of the Remote Config
-        required: true
-        schema:
-          type: string
-          example: ColorButton
-      responses:
-        204:
-          description: The Remote Config was deleted successfully.
-        400:
-          description: The Remote Config has NOT been deleted.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/errorResponse'
-
-  /remote-configs/{remote_config_name}/activate:
-    post:
-      summary: Activate Remote Config
-      description: This endpoint activates Remote Config. You can't deactivate Remote Config.
-      tags:
-      - Remote Configs
-      parameters:
-      - name: remote_config_name
-        in: path
-        description: name of the Remote Config
-        required: true
-        schema:
-          type: string
-          example: ColorButton
       responses:
         204:
           description: The Remote Config was created/updated successfully.
@@ -484,7 +437,7 @@ paths:
           example: ONLY_FR
       requestBody:
         description: |-
-          - You can't update actived Remote Config Override
+          - You can't update activated Remote Config Override
           - You can't link ABTest to multiple Remote Config Override
         required: true
         content:

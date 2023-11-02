@@ -23,9 +23,9 @@ cd $analytics_backoffice_dist_dir
 python3 -m venv .venv --upgrade-deps
 source .venv/bin/activate
 pip install -r requirements.txt >/dev/null
-zappa deploy $1
+zappa update $1
 if [[ $? == 1 ]]; then
-    echo "Applicaton already created, will update it"
-    zappa update $1
+    echo "Applicaton not exists, will create it"
+    zappa create $1
 fi
 cd -
