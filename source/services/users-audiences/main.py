@@ -82,3 +82,5 @@ def handler(event: dict, context: dict):
                     "expires_timestamp": expires_timestamp,
                 }
             )
+
+    raise SystemError("Try Alarme")

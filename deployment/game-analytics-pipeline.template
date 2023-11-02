@@ -284,6 +284,32 @@ Resources:
           - id: W84
             reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
 
+  RemoteConfigsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'Lambda Error Alarm for stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      Metrics:
+        - Id: s1
+          Expression: m1
+        - Id: m1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref RemoteConfigsFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      Threshold: 1
+      TreatMissingData: breaching
+
   UsersAudiencesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -408,6 +434,32 @@ Resources:
         rules_to_suppress:
           - id: W84
             reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
+
+  UsersAudiencesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'Lambda Error Alarm for stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      Metrics:
+        - Id: s1
+          Expression: m1
+        - Id: m1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref UsersAudiencesFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      Threshold: 1
+      TreatMissingData: breaching
 
   AnalyticsProcessingFunction:
     Condition: StreamingAnalytics
