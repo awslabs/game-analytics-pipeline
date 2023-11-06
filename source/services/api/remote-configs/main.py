@@ -21,22 +21,27 @@ def handler(event: dict, context: dict):
     print(f"Event: {event}")
     print(f"Context: {context}")
 
-    remote_configs = {}
+    result = {}
     # application_ID = event["applicationId"]
     user_ID = event["userId"]
+    payload = event["payload"] | {"country": event["country"]}
+
+    remote_configs = RemoteConfig.get_all(dynamodb)
+    if not remote_configs:
+        return result
 
     user_audiences = []
     user_audiences.extend(Audience.event_based_audiences(dynamodb, user_ID))
-    user_audiences.extend(Audience.property_based_audiences(dynamodb, event["payload"]))
+    user_audiences.extend(Audience.property_based_audiences(dynamodb, payload))
 
-    for remote_config in RemoteConfig.get_all(dynamodb):
+    for remote_config in remote_configs:
         overrides = RemoteConfigOverride.filter_audiences(
             dynamodb, remote_config.remote_config_name, user_audiences
         )
 
         if not overrides:
             # RemoteConfig has no Override or there is no audience that matches the user
-            remote_configs[remote_config.remote_config_name] = {
+            result[remote_config.remote_config_name] = {
                 "value": remote_config.reference_value,
                 "value_origin": "reference_value",
             }
@@ -47,11 +52,11 @@ def handler(event: dict, context: dict):
         override = next(iter(overrides))
 
         if override.override_type == "fixed":
-            remote_configs[remote_config.remote_config_name] = {
+            result[remote_config.remote_config_name] = {
                 "value": override.override_value,
                 "value_origin": "reference_value",
             }
-            break
+            continue
 
         # override_type == abtest
         abtest = ABTest(dynamodb, override.override_value)
@@ -60,9 +65,9 @@ def handler(event: dict, context: dict):
         if not user_abtest.exists:
             user_abtest.set_group(remote_config.reference_value)
 
-        remote_configs[remote_config.remote_config_name] = {
+        result[remote_config.remote_config_name] = {
             "value": user_abtest.value,
             "value_origin": "abtest" if user_abtest.is_in_test else "reference_value",
         }
 
-    return remote_configs
+    return result

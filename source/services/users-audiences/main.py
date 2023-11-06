@@ -37,7 +37,7 @@ def handler(event: dict, context: dict):
         for date in dates:
             athena_response = athena.start_query_execution(
                 QueryString=f"""
-                    SELECT DISTINCT(json_extract_scalar(user, '$.user_id'))
+                    SELECT json_extract_scalar(user, '$.user_id')
                     FROM {constants.ANALYTICS_TABLE}
                     WHERE ({audience['condition']})
                         AND year>='{date.year}'

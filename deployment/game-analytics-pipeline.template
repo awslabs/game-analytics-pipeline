@@ -2336,6 +2336,7 @@ Resources:
                   application/json: !Sub >
                     {
                       "applicationId": "$input.params('applicationId')",
+                      "country": "$input.params('CloudFront-Viewer-Country')",
                       "userId": "$input.params('userId')",
                       "payload": $input.body
                     }
