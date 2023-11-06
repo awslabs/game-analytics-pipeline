@@ -25,7 +25,9 @@ def handler(event: dict, context: dict):
     # application_ID = event["applicationId"]
     user_ID = event["userId"]
 
-    user_audiences = Audience.get_users_audiences(dynamodb, user_ID)
+    user_audiences = []
+    user_audiences.extend(Audience.event_based_audiences(dynamodb, user_ID))
+    user_audiences.extend(Audience.property_based_audiences(dynamodb, event["payload"]))
 
     for remote_config in RemoteConfig.get_all(dynamodb):
         overrides = RemoteConfigOverride.filter_audiences(
@@ -60,9 +62,7 @@ def handler(event: dict, context: dict):
 
         remote_configs[remote_config.remote_config_name] = {
             "value": user_abtest.value,
-            "value_origin": "abtest"
-            if user_abtest.is_in_test
-            else "reference_value",
+            "value_origin": "abtest" if user_abtest.is_in_test else "reference_value",
         }
 
     return remote_configs

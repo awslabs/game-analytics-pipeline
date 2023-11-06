@@ -48,7 +48,6 @@ else
     export AWS_PROFILE=sandbox
     AWS_REGION="eu-west-2"
     ENVIRONMENT="sandbox"
-    PARAMETER_OVERRIDES="--parameter-overrides SolutionAdminEmailAddress=florent@geode.com"
     if $IS_CHINA; then
         export AWS_PROFILE=sandbox-china
         AWS_REGION="cn-northwest-1"
@@ -72,8 +71,8 @@ aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENV
 # Store Regional Assets to S3 (Lambdas)
 aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
-# # Deploy Backoffce Remote Config API Gateway (Zappa)
-# ./deploy-analytics-backoffice.sh $ENVIRONMENT $AWS_REGION $PROJECT_NAME
+# Deploy Backoffce Remote Config API Gateway (Zappa)
+./deploy-analytics-backoffice.sh $ENVIRONMENT $AWS_REGION $PROJECT_NAME
 
 # Deploy CloudFormation by creating/updating Stack
 aws cloudformation deploy \

@@ -59,7 +59,9 @@ def delete_audience(audience_name: str):
     )
     if len(remote_configs_overrides) > 0:
         return (
-            jsonify(error="You can NOT delete audience : it used in Remote Overrides"),
+            jsonify(
+                error="You can NOT delete audience : it used in Remote Config Overrides"
+            ),
             400,
         )
 

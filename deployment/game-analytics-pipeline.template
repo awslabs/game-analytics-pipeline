@@ -2253,6 +2253,7 @@ Resources:
                         }
           "/applications/{applicationId}/remote-configs/{userId}":
             get:
+              # Legacy endpoint
               operationId: GetRemoteConfigs
               parameters:
                 paths:
@@ -2284,6 +2285,47 @@ Resources:
                       schema:
                         $ref: "#/components/schemas/ErrorException"
               x-amazon-apigateway-integration:
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseTemplates:
+                      application/json: '{}'
+                passthroughBehavior: "when_no_match"
+                type: mock
+            post:
+              operationId: CalculateRemoteConfigs
+              parameters:
+                paths:
+                  applicationId: true
+                  userId: true
+              security: []
+              summary: Attribute and returns Remote Configs for a user for an application
+              responses:
+                "200":
+                  description: Successful POST /remote-configs
+                  content:
+                    application/json: {}
+                "400":
+                  description: Bad Request Exception
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+                "401":
+                  description: Unauthorized Exception
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+                "500":
+                  description: Internal Server Error
+                  content:
+                    application/json:
+                      schema:
+                        $ref: "#/components/schemas/ErrorException"
+              x-amazon-apigateway-integration:
                 uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${RemoteConfigsFunction.Arn}/invocations
                 credentials: !GetAtt ApiGatewayRole.Arn
                 httpMethod: POST
@@ -2294,7 +2336,8 @@ Resources:
                   application/json: !Sub >
                     {
                       "applicationId": "$input.params('applicationId')",
-                      "userId": "$input.params('userId')"
+                      "userId": "$input.params('userId')",
+                      "payload": $input.body
                     }
                 responses:
                   default:

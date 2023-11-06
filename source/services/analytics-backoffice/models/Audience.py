@@ -14,6 +14,8 @@ class Audience:
     This class represents an Audience.
     """
 
+    __types = ("event_based", "property_based")
+
     def __init__(self, database: DynamoDBServiceResource, data: dict[str, Any]):
         self.__assert_data(data)
         self.__database = database
@@ -72,6 +74,13 @@ class Audience:
         """
         return self.__data["description"]
 
+    @property
+    def type(self) -> str:
+        """
+        This method returns type.
+        """
+        return self.__data["type"]
+
     def delete(self):
         """
         This method deletes audience from database.
@@ -95,7 +104,7 @@ class Audience:
                 "audience_name": self.audience_name,
                 "condition": self.condition,
                 "description": self.description,
-                "type": "event_based",
+                "type": self.type,
             }
         )
 
@@ -103,6 +112,7 @@ class Audience:
         audience_name = data["audience_name"]
         condition = data["condition"]
         description = data["description"]
+        audience_type = data["type"]
 
         assert (
             isinstance(audience_name, str) and audience_name != ""
@@ -111,3 +121,4 @@ class Audience:
             isinstance(condition, str) and audience_name != ""
         ), "`condition_value` should be non-empty string"
         assert isinstance(description, str), "`description` should be string"
+        assert audience_type in self.__types, f"`type` should be in {self.__types}"
