@@ -9,7 +9,9 @@ from flask import Flask, jsonify, request, wrappers
 from flask.json.provider import DefaultJSONProvider
 from flask_cors import CORS
 
+from blueprints.abtests import abtests_endpoints
 from blueprints.applications import applications_endpoints
+from blueprints.audiences import audiences_endpoints
 from blueprints.remote_configs import remote_configs_endpoints
 
 
@@ -43,7 +45,7 @@ class FlaskApp(Flask):
         self.json = FlaskAppEncoder(self)
 
         self.config["athena"] = boto3.client("athena")
-        self.config["database"] = boto3.resource("dynamodb",)
+        self.config["database"] = boto3.resource("dynamodb")
 
         @self.after_request
         def after_request(response: wrappers.Response):
@@ -65,7 +67,9 @@ class FlaskApp(Flask):
 
 
 app = FlaskApp(__name__)
+app.register_blueprint(abtests_endpoints, url_prefix="/abtests")
 app.register_blueprint(applications_endpoints, url_prefix="/applications")
+app.register_blueprint(audiences_endpoints, url_prefix="/audiences")
 app.register_blueprint(remote_configs_endpoints, url_prefix="/remote-configs")
 
 

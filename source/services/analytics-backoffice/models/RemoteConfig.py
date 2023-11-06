@@ -1,12 +1,10 @@
 """
 This module contains RemoteConfig class.
 """
-from typing import Any
+from typing import Any, List
 
-from boto3.dynamodb.conditions import Key
 from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
 
-from models.ABTest import ABTest
 from utils import constants
 
 
@@ -15,71 +13,47 @@ class RemoteConfig:
     This class represents a mobile application configuration that we can manage remotely.
     """
 
-    def __init__(
-        self,
-        database: DynamoDBServiceResource,
-        remote_config_ID: str,
-        remote_config_data: dict[str, Any],
-    ):
+    def __init__(self, database: DynamoDBServiceResource, data: dict[str, Any]):
+        self.__assert_data(data)
         self.__database = database
-        self.__remote_config_ID = remote_config_ID
-        self.__data = remote_config_data
+        self.__data = data
 
     @classmethod
-    def from_abtest_id(cls, database: DynamoDBServiceResource, abtest_ID: str):
+    def from_name(cls, database: DynamoDBServiceResource, remote_config_name: str):
         """
-        This method creates an instance of RemoteConfig from abtest_ID. it fetches database.
-        It returns None if there is no ABTest with this ID.
-        """
-        if abtest := ABTest.from_id(database, abtest_ID):
-            return cls.from_id(database, abtest.remote_config_ID)
-
-    @classmethod
-    def from_dict(
-        cls,
-        database: DynamoDBServiceResource,
-        remote_config_ID: str,
-        remote_config_data: dict[str, Any],
-    ):
-        """
-        This method creates an instance of RemoteConfig from dict.
-        It raises AssertionError if remote_config_data not matches with RemoteConfig schema.
-        """
-        cls.__assert_data(remote_config_data)
-        return cls(database, remote_config_ID, remote_config_data)
-
-    @classmethod
-    def from_id(cls, database: DynamoDBServiceResource, remote_config_ID: str):
-        """
-        This method creates an instance of RemoteConfig from ID. It fetches database.
-        It returns None if there is no RemoteConfig with this ID.
+        This method creates an instance of RemoteConfig from remote_config_name. It fetches database.
+        It returns None if there is no RemoteConfig with this name.
         """
         response = database.Table(constants.TABLE_REMOTE_CONFIGS).get_item(
-            Key={"ID": remote_config_ID}
+            Key={"remote_config_name": remote_config_name}
         )
         if item := response.get("Item"):
-            return cls(database, item.pop("ID"), item)
+            return cls(database, item)
+
+    @staticmethod
+    def get_all(database: DynamoDBServiceResource) -> List["RemoteConfig"]:
+        """
+        This static method returns all remote configs.
+        """
+        response = database.Table(constants.TABLE_REMOTE_CONFIGS).scan()
+        return [RemoteConfig(database, item) for item in response["Items"]]
+
+    @staticmethod
+    def exists(database: DynamoDBServiceResource, remote_config_name: str) -> bool:
+        """
+        This property returns True if RemoteConfig exists, else False.
+        """
+        response = database.Table(constants.TABLE_REMOTE_CONFIGS).get_item(
+            Key={"remote_config_name": remote_config_name}
+        )
+        return "Item" in response
 
     @property
-    def active(self) -> bool:
+    def description(self) -> str:
         """
-        This method returns True if RemoteConfig is active, else False.
+        This method returns description.
         """
-        return self.__data["active"] == 1
-
-    @property
-    def id(self) -> str:
-        """
-        This method returns id of RemoteConfig.
-        """
-        return self.__remote_config_ID
-
-    @property
-    def name(self) -> str:
-        """
-        This method returns name.
-        """
-        return self.__data["name"]
+        return self.__data["description"]
 
     @property
     def reference_value(self) -> str:
@@ -88,161 +62,46 @@ class RemoteConfig:
         """
         return self.__data["reference_value"]
 
-    def activate(self):
+    @property
+    def remote_config_name(self) -> str:
         """
-        This method activates RemoteConfig in database.
+        This method returns remote_config_name.
         """
-        self.__database.Table(constants.TABLE_REMOTE_CONFIGS).update_item(
-            Key={"ID": self.__remote_config_ID},
-            AttributeUpdates={"active": {"Value": 1, "Action": "PUT"}},
-        )
-
-    def activate_abtest(self, abtest_ID: str, start_timestamp: int | None = None):
-        """
-        This method activates ABTest in database.
-        It raises AssertionError if start_timestamp is less than the current timestamp.
-        """
-        if abtest := ABTest.from_id(self.__database, abtest_ID):
-            abtest.activate(start_timestamp)
-
-    def create(self):
-        """
-        This method creates RemoteConfig in database.
-        """
-        # Check if there is already a remote config with the same name
-        if self.__name_exists(self.name):
-            raise AssertionError(f"There is already a remote config named {self.name}")
-
-        self.__database.Table(constants.TABLE_REMOTE_CONFIGS).put_item(
-            Item=self.__data | {"ID": self.__remote_config_ID, "active": 0}
-        )
-
-    def create_abtest(self, abtest_ID: str, abtest_data: dict[str, Any]):
-        """
-        This method creates an ABTest for this RemoteConfig.
-        It raises AssertionError if abtest_data not matches with ABTest schema.
-        """
-        abtest = ABTest.from_dict(self.__database, abtest_ID, abtest_data)
-        abtest.create(self.__remote_config_ID)
+        return self.__data["remote_config_name"]
 
     def delete(self):
         """
         This method deletes RemoteConfig from database.
         """
         self.__database.Table(constants.TABLE_REMOTE_CONFIGS).delete_item(
-            Key={"ID": self.__remote_config_ID}
+            Key={"remote_config_name": self.remote_config_name}
         )
 
-    def delete_abtest(self, abtest_ID: str):
+    def to_dict(self) -> dict[str, Any]:
         """
-        This method deletes an ABTest. It returns None if there is no ABTest with this ID.
+        This method returns a dict that represents the RemoteConfig.
         """
-        if abtest := ABTest.from_id(self.__database, abtest_ID):
-            if abtest.active:
-                raise AssertionError("You can't update an activated ABTest")
-            abtest.delete()
+        return self.__data
 
-    def has_active_abtest(self, active_abtests: list[ABTest]) -> bool:
+    def update_database(self):
         """
-        This method returns True if this RemoteConfig
-        has already an active abtest, else False.
+        This method creates RemoteConfig in database.
         """
-        return any(
-            abtest.remote_config_ID == self.__remote_config_ID
-            for abtest in active_abtests
+        self.__database.Table(constants.TABLE_REMOTE_CONFIGS).put_item(
+            Item={
+                "remote_config_name": self.remote_config_name,
+                "description": self.description,
+                "reference_value": self.reference_value,
+            }
         )
 
-    def pause_abtest(self, abtest_ID: str, paused: bool):
-        """
-        This method pauses ABTest in database.
-        It raises AssertionError if ABTest is NOT active.
-        """
-        if abtest := ABTest.from_id(self.__database, abtest_ID):
-            abtest.pause(paused)
+    def __assert_data(self, data: dict[str, Any]):
+        remote_config_name = data["remote_config_name"]
+        description = data["description"]
+        reference_value = data["reference_value"]
 
-    def promote_abtest(self, abtest_ID: str, promoted_value: str):
-        """
-        This method promotes ABTest in database.
-        It raises AssertionError if ABTest is NOT active
-        or if promoted_value is NOT in ABTest.
-        """
-        abtest = ABTest.from_id(self.__database, abtest_ID)
-        if not abtest:
-            return
-
-        if not abtest.active:
-            raise AssertionError("You can't promote a deactivated ABTest")
-
-        if promoted_value not in [self.reference_value] + abtest.variants:
-            raise AssertionError(f"{promoted_value} value not in ABTest {abtest_ID}")
-
-        # Update reference value of remote config
-        self.__database.Table(constants.TABLE_REMOTE_CONFIGS).update_item(
-            Key={"ID": self.__remote_config_ID},
-            AttributeUpdates={
-                "reference_value": {"Value": promoted_value, "Action": "PUT"}
-            },
-        )
-
-        abtest.save_history(self.name, self.reference_value, promoted_value)
-        abtest.purge()
-        abtest.delete()
-
-    def update(self, new_data: dict[str, Any]):
-        """
-        This method updates RemoteConfig in database.
-        It raises AssertionError if new_data not matches with RemoteConfig schema.
-        """
-        self.__assert_data(new_data)
-        new_name = new_data["name"]
-
-        if self.active:
-            # These fields can't updated if RemoteConfig is active
-            assert (
-                self.name == new_name
-            ), "You can't update `name` field because remote config is active"
-            assert (
-                self.reference_value == new_data["reference_value"]
-            ), "You can't update `reference_value` field because remote config is active"
-
-        if self.__name_exists(new_name, to_exclude=self.__remote_config_ID):
-            raise AssertionError(f"There is already a remote config named {new_name}")
-
-        self.__database.Table(constants.TABLE_REMOTE_CONFIGS).update_item(
-            Key={"ID": self.__remote_config_ID},
-            AttributeUpdates={
-                key: {"Value": value, "Action": "PUT"}
-                for key, value in new_data.items()
-            },
-        )
-
-    def update_abtest(self, abtest_ID: str, new_abtest_data: dict[str, Any]):
-        """
-        This method updates an ABTest. It returns None if there is no ABTest with this ID.
-        It raises AssertionError if abtest_data not matches with ABTest schema.
-        """
-        if abtest := ABTest.from_id(self.__database, abtest_ID):
-            if abtest.active:
-                raise AssertionError("You can't update an activated ABTest")
-            abtest.update(new_abtest_data)
-
-    @staticmethod
-    def __assert_data(data: dict[str, Any]):
-        copy_data = data.copy()
-        assert isinstance(
-            copy_data.pop("description", None), str
-        ), "`description` should be str"
-        assert isinstance(copy_data.pop("name", None), str), "`name` should be str"
-        assert isinstance(
-            copy_data.pop("reference_value", None), str
-        ), "`reference_value` should be str"
-
-        if copy_data:
-            raise AssertionError(f"Unexpected fields : {list(copy_data)}")
-
-    def __name_exists(self, name: str, to_exclude: str = "") -> bool:
-        response = self.__database.Table(constants.TABLE_REMOTE_CONFIGS).query(
-            IndexName="name-index",
-            KeyConditionExpression=Key("name").eq(name),
-        )
-        return any(item["ID"] != to_exclude for item in response.get("Items", []))
+        assert (
+            isinstance(remote_config_name, str) and remote_config_name != ""
+        ), "`remote_config_name` should be non-empty string"
+        assert isinstance(description, str), "`description` should be string"
+        assert isinstance(reference_value, str), "`reference_value` should be string"
