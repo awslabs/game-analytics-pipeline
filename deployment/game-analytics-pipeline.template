@@ -308,7 +308,7 @@ Resources:
             Stat: Sum
           ReturnData: false
       Threshold: 1
-      TreatMissingData: breaching
+      TreatMissingData: notBreaching
 
   UsersAudiencesFunction:
     Type: AWS::Serverless::Function
@@ -459,7 +459,7 @@ Resources:
             Stat: Sum
           ReturnData: false
       Threshold: 1
-      TreatMissingData: breaching
+      TreatMissingData: notBreaching
 
   AnalyticsProcessingFunction:
     Condition: StreamingAnalytics
@@ -1547,9 +1547,18 @@ Resources:
       AttributeDefinitions:
         - AttributeName: audience_name
           AttributeType: S
+        - AttributeName: type
+          AttributeType: S
       KeySchema:
         - AttributeName: audience_name
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: type-index
+          KeySchema:
+            - AttributeName: type
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
