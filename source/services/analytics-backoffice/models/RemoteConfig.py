@@ -14,7 +14,7 @@ class RemoteConfig:
     """
 
     def __init__(self, database: DynamoDBServiceResource, data: dict[str, Any]):
-        self.__assert_data(data)
+        self.__assert_data(database, data)
         self.__database = database
         self.__data = data
 
@@ -47,6 +47,13 @@ class RemoteConfig:
             Key={"remote_config_name": remote_config_name}
         )
         return "Item" in response
+
+    @property
+    def application_IDs(self) -> list[str]:
+        """
+        This method returns application_IDs.
+        """
+        return self.__data["applications"]
 
     @property
     def description(self) -> str:
@@ -92,16 +99,32 @@ class RemoteConfig:
                 "remote_config_name": self.remote_config_name,
                 "description": self.description,
                 "reference_value": self.reference_value,
+                "applications": self.application_IDs,
             }
         )
 
-    def __assert_data(self, data: dict[str, Any]):
+    def __assert_data(self, database: DynamoDBServiceResource, data: dict[str, Any]):
+        application_IDs = data["applications"]
         remote_config_name = data["remote_config_name"]
         description = data["description"]
         reference_value = data["reference_value"]
 
+        assert isinstance(
+            application_IDs, list
+        ), "`application_IDs` should be a list of non-empty string"
         assert (
             isinstance(remote_config_name, str) and remote_config_name != ""
         ), "`remote_config_name` should be non-empty string"
         assert isinstance(description, str), "`description` should be string"
         assert isinstance(reference_value, str), "`reference_value` should be string"
+
+        for application_ID in application_IDs:
+            assert (
+                application_ID != ""
+            ), "`application_IDs` should be a list of non-empty string"
+            response = database.Table(constants.TABLE_APPLICATIONS).get_item(
+                Key={"application_id": application_ID}
+            )
+            assert (
+                "Item" in response
+            ), f"`There is no application with ID : {application_ID}`"

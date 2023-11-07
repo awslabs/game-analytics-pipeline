@@ -72,7 +72,7 @@ aws s3 cp ./global-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENV
 aws s3 cp ./regional-s3-assets s3://$DIST_OUTPUT_BUCKET-$AWS_REGION/analytics/$ENVIRONMENT/$VERSION --recursive --acl bucket-owner-full-control
 
 # Deploy Backoffce Remote Config API Gateway (Zappa)
-./deploy-analytics-backoffice.sh $ENVIRONMENT $AWS_REGION $PROJECT_NAME
+./deploy-analytics-backoffice.sh $ENVIRONMENT $AWS_REGION $PROJECT_NAME $GEODE_DOMAIN_NAME
 
 # Deploy CloudFormation by creating/updating Stack
 aws cloudformation deploy \

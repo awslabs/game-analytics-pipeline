@@ -17,12 +17,18 @@ class RemoteConfig:
         self.__data = data
 
     @staticmethod
-    def get_all(dynamodb: DynamoDBServiceResource) -> List["RemoteConfig"]:
+    def get_all(
+        dynamodb: DynamoDBServiceResource, application_ID: str
+    ) -> List["RemoteConfig"]:
         """
         This method returns all RemoteConfigs.
         """
         response = dynamodb.Table(constants.REMOTE_CONFIGS_TABLE).scan()
-        return [RemoteConfig(item) for item in response["Items"]]
+        return [
+            RemoteConfig(item)
+            for item in response["Items"]
+            if application_ID in item["applications"]
+        ]
 
     @property
     def reference_value(self) -> str:

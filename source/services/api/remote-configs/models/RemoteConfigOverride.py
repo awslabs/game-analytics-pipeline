@@ -33,8 +33,8 @@ class RemoteConfigOverride:
             return []
 
         response = dynamodb.Table(constants.REMOTE_CONFIGS_OVERRIDES_TABLE).query(
-            IndexName="remote_config_name-index",
-            KeyConditionExpression=Key("remote_config_name").eq(remote_config_name),
+            IndexName="remote_config_name-active-index",
+            KeyConditionExpression=Key("remote_config_name").eq(remote_config_name) & Key("active").eq(1),
             FilterExpression=Attr("audience_name").is_in(audience_names),
         )
         return [RemoteConfigOverride(item) for item in response["Items"]]

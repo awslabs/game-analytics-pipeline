@@ -22,11 +22,11 @@ def handler(event: dict, context: dict):
     print(f"Context: {context}")
 
     result = {}
-    # application_ID = event["applicationId"]
+    application_ID = event["applicationId"]
     user_ID = event["userId"]
     payload = event["payload"] | {"country": event["country"]}
 
-    remote_configs = RemoteConfig.get_all(dynamodb)
+    remote_configs = RemoteConfig.get_all(dynamodb, application_ID)
     if not remote_configs:
         return result
 

@@ -311,6 +311,7 @@ paths:
               required:
               - condition
               - description
+              - type
               type: object
               properties:
                 condition:
@@ -319,6 +320,11 @@ paths:
                 description:
                   type: string
                   example: This Audience targets only French players
+                type:
+                  type: string
+                  enum:
+                  - event_based
+                  - property_based
       responses:
         204:
           description: The Audience was created/updated successfully.
@@ -390,10 +396,18 @@ paths:
           application/json:
             schema:
               required:
+              - applications
               - description
               - reference_value
               type: object
               properties:
+                applications:
+                  type: array
+                  items:
+                    type: string
+                  example:
+                  - ios.com.geode.dazzly
+                  - android.com.geode.dazzly
                 description:
                   type: string
                   example: This Remote Config allows to handle color button.

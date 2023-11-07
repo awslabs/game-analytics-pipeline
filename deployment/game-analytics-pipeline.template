@@ -333,7 +333,7 @@ Resources:
         AudienceCalculation:
           Type: Schedule
           Properties:
-            Schedule: !FindInMap [JobScheduleSettings, ScheduledJobIntervals, EveryMinute]
+            Schedule: !FindInMap [JobScheduleSettings, ScheduledJobIntervals, EveryDay]
       Role: !GetAtt UsersAudiencesRole.Arn
     Metadata:
       cfn_nag:
@@ -1441,7 +1441,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-applications'
       AttributeDefinitions:
         - AttributeName: application_id
@@ -1459,7 +1459,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-authorizations'
       AttributeDefinitions:
         - AttributeName: api_key_id
@@ -1503,7 +1503,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-idempotency'
       AttributeDefinitions:
         - AttributeName: event_id
@@ -1524,7 +1524,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-remote-configs'
       AttributeDefinitions:
         - AttributeName: remote_config_name
@@ -1542,7 +1542,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-audiences'
       AttributeDefinitions:
         - AttributeName: audience_name
@@ -1569,7 +1569,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-abtests'
       AttributeDefinitions:
         - AttributeName: abtest_name
@@ -1587,7 +1587,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-remote-configs-overrides'
       AttributeDefinitions:
         - AttributeName: remote_config_name
@@ -1596,16 +1596,20 @@ Resources:
           AttributeType: S
         - AttributeName: override_type
           AttributeType: S
+        - AttributeName: active
+          AttributeType: N
       KeySchema:
         - AttributeName: remote_config_name
           KeyType: HASH
         - AttributeName: audience_name
           KeyType: RANGE
       GlobalSecondaryIndexes:
-        - IndexName: remote_config_name-index
+        - IndexName: remote_config_name-active-index
           KeySchema:
             - AttributeName: remote_config_name
               KeyType: HASH
+            - AttributeName: active
+              KeyType: RANGE
           Projection:
             ProjectionType: ALL
         - IndexName: audience_name-index
@@ -1630,7 +1634,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-remote-configs-overrides-history'
       AttributeDefinitions:
         - AttributeName: ID
@@ -1648,7 +1652,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-users-abtests'
       AttributeDefinitions:
         - AttributeName: uid
@@ -1679,7 +1683,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
-      DeletionProtectionEnabled: false
+      DeletionProtectionEnabled: true
       TableName: !Sub '${AWS::StackName}-users-audiences'
       AttributeDefinitions:
         - AttributeName: uid

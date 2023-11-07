@@ -45,17 +45,20 @@ class Audience:
 
         audiences = []
         for item in response["Items"]:
-            audience_match = True
-            for condition in item["condition"].split("&"):
-                parameter, value = condition.split("=")
-                if user_data[parameter] != value:
-                    audience_match = False
+            condition_str = item["condition"]
+            if "||" in condition_str:
+                audience_match = Audience.__audience_match(
+                    user_data, condition_str.split("||"), "||"
+                )
+            else:
+                audience_match = Audience.__audience_match(
+                    user_data, condition_str.split("&"), "&"
+                )
 
             if audience_match:
                 audiences.append(Audience(item["audience_name"]))
 
         return audiences
-
 
     @property
     def audience_name(self) -> str:
@@ -63,3 +66,16 @@ class Audience:
         This property returns audience_name.
         """
         return self.__audience_name
+
+    @staticmethod
+    def __audience_match(
+        user_data: dict[str, Any], conditions: list[str], operator: str
+    ) -> bool:
+        for condition in conditions:
+            parameter, value = condition.split("=")
+            if user_data[parameter] != value and operator == "&":
+                return False
+            if user_data[parameter] == value and operator == "||":
+                return True
+
+        return operator == "&"
