@@ -3122,7 +3122,7 @@ Resources:
       Period: 300
       EvaluationPeriods: 2
       ComparisonOperator: GreaterThanThreshold
-      Threshold: 900
+      Threshold: 1800
       TreatMissingData: notBreaching
       AlarmActions:
         - !Ref Notifications
