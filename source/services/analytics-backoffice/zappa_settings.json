@@ -1,15 +1,45 @@
 {
-    "%%ENVIRONMENT%%": {
+    "sandbox": {
         "app_function": "main.app",
         "aws_region": "%%AWS_REGION%%",
         "s3_bucket": "zappa-bucket-%%AWS_REGION%%",
         "environment_variables": {
-            "GEODE_ENVIRONMENT": "%%ENVIRONMENT%%",
+            "GEODE_ENVIRONMENT": "sandbox",
             "PROJECT_NAME": "%%PROJECT_NAME%%"
         },
         "profile_name": "%%PROFILE_NAME%%",
         "project_name": "%%PROJECT_NAME%%-backoffice",
-        "role_name": "%%PROJECT_NAME%%-backoffice-%%ENVIRONMENT%%-ZappaLambdaExecutionRole",
+        "role_name": "%%PROJECT_NAME%%-backoffice-sandbox-ZappaLambdaExecutionRole",
+        "runtime": "python3.10"
+    },
+    "dev": {
+        "app_function": "main.app",
+        "aws_region": "%%AWS_REGION%%",
+        "s3_bucket": "zappa-bucket-%%AWS_REGION%%",
+        "environment_variables": {
+            "GEODE_ENVIRONMENT": "dev",
+            "PROJECT_NAME": "%%PROJECT_NAME%%"
+        },
+        "geode_base_path": "analytics-backoffice",
+        "geode_domain_name": "%%GEODE_DOMAIN_NAME%%",
+        "profile_name": "%%PROFILE_NAME%%",
+        "project_name": "%%PROJECT_NAME%%-backoffice",
+        "role_name": "%%PROJECT_NAME%%-backoffice-dev-ZappaLambdaExecutionRole",
+        "runtime": "python3.10"
+    },
+    "prod": {
+        "app_function": "main.app",
+        "aws_region": "%%AWS_REGION%%",
+        "s3_bucket": "zappa-bucket-%%AWS_REGION%%",
+        "environment_variables": {
+            "GEODE_ENVIRONMENT": "prod",
+            "PROJECT_NAME": "%%PROJECT_NAME%%"
+        },
+        "geode_base_path": "analytics-backoffice",
+        "geode_domain_name": "%%GEODE_DOMAIN_NAME%%",
+        "profile_name": "%%PROFILE_NAME%%",
+        "project_name": "%%PROJECT_NAME%%-backoffice",
+        "role_name": "%%PROJECT_NAME%%-backoffice-prod-ZappaLambdaExecutionRole",
         "runtime": "python3.10"
     }
 }

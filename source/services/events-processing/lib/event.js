@@ -69,7 +69,6 @@ class Event {
       const applicationId = input.application_id;
       const country = input.country;
       const event = input.event;
-      const ip_adress = input.ip_adress;
       
       // Add a processing timestamp and the Lambda Request Id to the event metadata
       let metadata = {
@@ -142,7 +141,6 @@ class Event {
         }
         if(event.hasOwnProperty('user')){
           transformed_event.user = event.user;
-          transformed_event.user.ip_adress = String(ip_adress)
           transformed_event.user.country = String(country)
         }
         if(event.hasOwnProperty('device')){
@@ -153,6 +151,10 @@ class Event {
         }
         if(event.hasOwnProperty('event_data')){
           transformed_event.event_data = event.event_data;
+          if(event.event_data.hasOwnProperty('currency') && event.event_data.hasOwnProperty('revenues')){
+            let rate = await _self.getExchangeRate(event.event_data.currency)
+            transformed_event.event_data.revenues_usd = event.event_data.revenues / rate
+          }
         }
         
         transformed_event.application_name = String(application.application_name);
@@ -197,10 +199,13 @@ class Event {
         }
         if(event.hasOwnProperty('event_data')){
           unregistered_format.event_data = event.event_data;
+          if(event.event_data.hasOwnProperty('currency') && event.event_data.hasOwnProperty('revenues')){
+            let rate = await _self.getExchangeRate(event.event_data.currency)
+            unregistered_format.event_data.revenues_usd = event.event_data.revenues / rate
+          }
         }
         if(event.hasOwnProperty('user')){
           unregistered_format.user = event.user;
-          unregistered_format.user.ip_adress = String(ip_adress)
           unregistered_format.user.country = String(country)
         }
         if(event.hasOwnProperty('device')){
@@ -307,7 +312,40 @@ class Event {
       return Promise.resolve(applicationsCacheResult);
     }
   }
-  
+
+  /**
+   * Retrieve exchange rate from DynamoDB
+   * The base currency is USD.
+   */
+  async getExchangeRate(currency) {
+    const params = {
+      TableName: process.env.EXCHANGE_RATES_TABLE,
+      Key: {
+        currency: currency.toUpperCase()
+      }
+    };
+    
+    // first try to fetch from cache
+    let currencyCacheResult = global.currencyCache.get(currency)
+    if (currencyCacheResult == undefined) {
+      // get from DynamoDB and set in Applications cache
+      const docClient = new AWS.DynamoDB.DocumentClient(this.dynamoConfig);
+      try {
+        let data = await docClient.get(params).promise();
+        // if found in ddb, set in cache and return it
+        const { rate } = data.Item;
+        global.currencyCache.set(currency, rate);
+        return Promise.resolve(rate);
+      } catch (err) {
+        console.log(JSON.stringify(err));
+        return Promise.reject(err);
+      }
+    } else {
+      // if in cache, return it
+      return Promise.resolve(currencyCacheResult);
+    }
+  }
+
   /**
    * Validate input data against JSON schema
    */

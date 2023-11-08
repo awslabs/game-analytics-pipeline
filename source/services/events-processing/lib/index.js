@@ -31,6 +31,7 @@ const Event = require('./event.js');
  * Maintains a local cache of registered Applications in DynamoDB. 
  */
 global.applicationsCache = new NodeCache({stdTTL: process.env.CACHE_TIMEOUT_SECONDS, checkPeriod: 60, maxKeys: 1000, useClones: false});
+global.currencyCache = new NodeCache({stdTTL: process.env.CACHE_TIMEOUT_SECONDS, checkPeriod: 60, maxKeys: 1000, useClones: false});
 
 const respond = async (event, context) => {
   let validEvents = 0;
