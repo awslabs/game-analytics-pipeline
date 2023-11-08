@@ -20,12 +20,13 @@ echo "Build Analytics Backoffice project"
 echo "------------------------------------------------------------------------------"
 
 cd $analytics_backoffice_dist_dir
+rm -r .venv 2>/dev/null
 python3 -m venv .venv --upgrade-deps
 source .venv/bin/activate
 pip install -r requirements.txt >/dev/null
 zappa update $1
 if [[ $? == 1 ]]; then
     echo "Applicaton not exists, will create it"
-    zappa create $1
+    zappa deploy $1
 fi
 cd -
