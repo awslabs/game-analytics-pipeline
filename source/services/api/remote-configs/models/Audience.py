@@ -46,11 +46,14 @@ class Audience:
         audiences = []
         for item in response["Items"]:
             condition_str = item["condition"]
+            if "&" in condition_str and "||" in condition_str:
+                raise ValueError("We NOT handle & AND || in the same condition")
             if "||" in condition_str:
                 audience_match = Audience.__audience_match(
                     user_data, condition_str.split("||"), "||"
                 )
             else:
+                # If there is only one parameter or multiple AND parameter
                 audience_match = Audience.__audience_match(
                     user_data, condition_str.split("&"), "&"
                 )
