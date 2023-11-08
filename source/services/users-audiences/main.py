@@ -72,9 +72,6 @@ def handler(event: dict, context: dict):
                 )
                 continue
 
-            query_results = athena.get_query_results(QueryExecutionId=query_ID)
-            result_set = query_results["ResultSet"]
-
             # Get Athena Query Results
             query_results = athena.get_query_results(QueryExecutionId=query_ID)
             result_set = query_results["ResultSet"]
