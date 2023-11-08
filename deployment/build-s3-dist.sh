@@ -116,6 +116,20 @@ cp users-audiences.zip $build_dist_dir/users-audiences.zip
 deactivate
 
 echo "------------------------------------------------------------------------------"  
+echo "Packaging Lambda Function - Crash Report service"  
+echo "------------------------------------------------------------------------------"  
+cd $source_dir/services/crash-report
+rm -r dist 2>/dev/null
+rsync -av --exclude=.venv/ --exclude=.pylintrc * dist >/dev/null
+cd dist
+python3.11 -m venv .venv --upgrade-deps
+source .venv/bin/activate
+pip install -r requirements.txt --target . >/dev/null
+zip -r crash-report.zip . >/dev/null
+cp crash-report.zip $build_dist_dir/crash-report.zip
+deactivate
+
+echo "------------------------------------------------------------------------------"  
 echo "Packaging Lambda Function - Lambda Authorizer"  
 echo "------------------------------------------------------------------------------"  
 cd $source_dir/services/api/lambda-authorizer

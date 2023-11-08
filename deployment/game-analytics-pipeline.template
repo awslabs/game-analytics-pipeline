@@ -68,6 +68,7 @@ Conditions:
     - 'Yes'
   StreamingAnalytics: !Equals [!Ref EnableStreamingAnalytics, 'Yes']
   ConfigureDevMode: !Equals [!Ref SolutionMode, 'Dev']
+  ConfigureProdMode: !Equals [!Ref SolutionMode, 'Prod']
 
 Globals:
   Function:
@@ -453,6 +454,167 @@ Resources:
               Dimensions:
                 - Name: FunctionName
                   Value: !Ref UsersAudiencesFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 300
+            Stat: Sum
+          ReturnData: false
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  CrashReportFunction:
+    Type: AWS::Serverless::Function
+    Condition: ConfigureProdMode
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-CrashReportFunction'
+      Handler: main.handler
+      Description: 'Function that reports crashes'
+      Runtime: python3.11
+      CodeUri: 
+        Bucket: !Join ["-", [!FindInMap ["SourceCode", "General", "S3Bucket"], Ref: "AWS::Region"]]
+        Key: !Join ["/", [!FindInMap ["SourceCode", "General", "KeyPrefix"], "crash-report.zip"]]
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          ANALYTICS_BUCKET: !Ref AnalyticsBucket
+          ANALYTICS_DATABASE: !Ref GameEventsDatabase
+          ANALYTICS_TABLE: !FindInMap [GlueSettings, LocationS3Prefix, RawEventsS3Prefix]
+          APPLICATIONS_TABLE: !Ref ApplicationsTable
+          CRASHES_TABLE: !Ref CrashesTable
+      Events:
+        CrashReport:
+          Type: Schedule
+          Properties:
+            Schedule: !FindInMap [JobScheduleSettings, ScheduledJobIntervals, Every1Hour]
+      Role: !GetAtt CrashReportRole.Arn
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: 'Solution does not use VPC resources and does not require VPC connectivity'
+
+  CrashReportRole:
+    Type: AWS::IAM::Role
+    Condition: ConfigureProdMode
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CrashReportRole'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+      - PolicyName: UsersAudiencesPolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Sid: CWLogs
+              Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutDestination
+                - logs:PutLogEvents
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+            - Sid: DynamoDBAccess
+              Effect: Allow
+              Action:
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:GetRecords
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                - !GetAtt ApplicationsTable.Arn
+                - !Sub ${ApplicationsTable.Arn}/index/*
+                - !GetAtt CrashesTable.Arn
+                - !Sub ${CrashesTable.Arn}/index/*
+            - Sid: GlueAccess
+              Effect: Allow
+              Action:
+                - glue:GetDatabases
+                - glue:GetTable
+                - glue:GetPartition
+                - glue:GetPartitions
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog'
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GameEventsDatabase}/*'
+                - !Sub 'arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GameEventsDatabase}'
+            - Sid: AthenaAccess
+              Effect: Allow
+              Action:
+                - athena:StartQueryExecution
+                - athena:GetQueryExecution
+                - athena:GetQueryResults
+              Resource:
+                - '*'
+            - Sid: S3Access
+              Effect: Allow
+              Action:
+                - s3:GetBucketLocation
+                - s3:GetObject
+                - s3:ListBucket
+                - s3:ListBucketMultipartUploads
+                - s3:AbortMultipartUpload
+                - s3:PutObject
+                - s3:ListMultipartUploadParts
+              Resource:
+                - !GetAtt AnalyticsBucket.Arn
+                - !Sub ${AnalyticsBucket.Arn}/*
+            - Sid: KmsAccess
+              Effect: Allow
+              Action:
+                - kms:Decrypt
+                - kms:Encrypt
+                - kms:GenerateDataKey
+              Resource:
+                - !Sub 'arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/glue'
+            - Sid: SecretsManagerAccess
+              Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource:
+                - '*'
+
+  CrashReportFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: ConfigureProdMode
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${CrashReportFunction}'
+      RetentionInDays: !FindInMap [CloudWatchSettings, LogGroup, RetentionInDays]
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: 'CloudWatch Log Groups provide encryption at rest by default using keys managed by AWS'
+
+  CrashReportAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: ConfigureProdMode
+    Properties:
+      AlarmActions:
+        - !Ref Notifications
+      AlarmDescription: !Sub 'Lambda Error Alarm for stack ${AWS::StackName}'
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      Metrics:
+        - Id: s1
+          Expression: m1
+        - Id: m1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref CrashReportFunction
               MetricName: Errors
               Namespace: AWS/Lambda
             Period: 300
@@ -1712,7 +1874,33 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: expires_timestamp
         Enabled: true
-  
+
+  CrashesTable:
+    Type: AWS::DynamoDB::Table
+    Condition: ConfigureProdMode
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      TableName: !Sub '${AWS::StackName}-crashes'
+      AttributeDefinitions:
+        - AttributeName: application_name
+          AttributeType: S
+        - AttributeName: app_version
+          AttributeType: S
+      KeySchema:
+        - AttributeName: application_name
+          KeyType: HASH
+        - AttributeName: app_version
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      TimeToLiveSpecification:
+        AttributeName: expires_timestamp
+        Enabled: true
+
   
   ####################
   # Custom Resources #
