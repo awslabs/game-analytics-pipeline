@@ -1,3 +1,7 @@
+# Disclaimer
+This Game Analytics Pipeline (v1) solution has been upgraded to a v2. The new repository is located here with steps on deployment:
+https://github.com/aws-solutions-library-samples/guidance-for-game-analytics-pipeline-on-aws/tree/main
+
 # AWS Game Analytics Pipeline Solution
 Many Amazon Web Services (AWS) games customers want to build their own custom analytics solutions that provide flexibility and customization without the complexity of managing infrastructure. 
 
